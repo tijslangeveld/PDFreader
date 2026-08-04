@@ -262,7 +262,9 @@ function wireDownloadSource(container) {
 // Text size, typeface and light/dark, persisted per origin so the choice
 // survives reloads and carries across bundles on the same host.
 
-const FS_STEPS = [13, 14, 15, 16, 17, 18, 20, 22];
+const FS_STEPS = [11, 12, 13, 14, 15, 16, 17, 18, 20, 22];
+const DEFAULT_FS = 14;
+const DEFAULT_FONT = 'ro-sans';
 const FONT_STACKS = {
   system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   inter: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
@@ -271,7 +273,9 @@ const FONT_STACKS = {
   lato: '"Lato", -apple-system, BlinkMacSystemFont, sans-serif',
   'ro-sans': '"RijksoverheidSans", -apple-system, BlinkMacSystemFont, sans-serif',
 };
-const PREFS_KEY = 'pdfviewer.prefs';
+// Versioned: earlier builds persisted their defaults on first paint, so a
+// returning reader would otherwise be stuck with the old default size and font.
+const PREFS_KEY = 'pdfviewer.prefs.v2';
 
 function loadPrefs() {
   try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch (_) { return {}; }
@@ -296,49 +300,46 @@ function wireSettings() {
 
   // Size ──
   let fsIdx = FS_STEPS.indexOf(prefs.fs);
-  if (fsIdx === -1) fsIdx = FS_STEPS.indexOf(16);
-  function applyFs() {
+  if (fsIdx === -1) fsIdx = FS_STEPS.indexOf(DEFAULT_FS);
+  function applyFs(persist) {
     root.style.setProperty('--fs', FS_STEPS[fsIdx] + 'px');
     downBtn.disabled = fsIdx === 0;
     upBtn.disabled = fsIdx === FS_STEPS.length - 1;
-    prefs.fs = FS_STEPS[fsIdx];
-    savePrefs(prefs);
+    if (persist) { prefs.fs = FS_STEPS[fsIdx]; savePrefs(prefs); }
   }
-  upBtn.addEventListener('click', () => { if (fsIdx < FS_STEPS.length - 1) { fsIdx++; applyFs(); } });
-  downBtn.addEventListener('click', () => { if (fsIdx > 0) { fsIdx--; applyFs(); } });
-  applyFs();
+  upBtn.addEventListener('click', () => { if (fsIdx < FS_STEPS.length - 1) { fsIdx++; applyFs(true); } });
+  downBtn.addEventListener('click', () => { if (fsIdx > 0) { fsIdx--; applyFs(true); } });
+  applyFs(false);
 
   // Typeface ──
-  function applyFont(name) {
-    const stack = FONT_STACKS[name] || FONT_STACKS.system;
+  function applyFont(name, persist) {
+    const stack = FONT_STACKS[name] || FONT_STACKS[DEFAULT_FONT];
     root.style.setProperty('--font-stack', stack);
-    fontSel.value = FONT_STACKS[name] ? name : 'system';
-    prefs.font = fontSel.value;
-    savePrefs(prefs);
+    fontSel.value = FONT_STACKS[name] ? name : DEFAULT_FONT;
+    if (persist) { prefs.font = fontSel.value; savePrefs(prefs); }
   }
-  fontSel.addEventListener('change', () => applyFont(fontSel.value));
-  applyFont(prefs.font || 'system');
+  fontSel.addEventListener('change', () => applyFont(fontSel.value, true));
+  applyFont(prefs.font || DEFAULT_FONT, false);
 
   // Light / dark ──
   // Until the reader picks one, follow the system: no data-theme attribute, so
   // the prefers-color-scheme block in the stylesheet decides.
   const systemDark = () => window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  function applyTheme(theme) {
+  function applyTheme(theme, persist) {
     if (theme === 'dark' || theme === 'light') root.setAttribute('data-theme', theme);
     else root.removeAttribute('data-theme');
     const isDark = theme === 'dark' || (theme !== 'light' && systemDark());
     themeBtn.innerHTML = isDark ? SUN : MOON;
     themeBtn.setAttribute('aria-label', isDark ? 'Lichte modus' : 'Donkere modus');
     themeBtn.title = isDark ? 'Lichte modus' : 'Donkere modus';
-    prefs.theme = theme;
-    savePrefs(prefs);
+    if (persist) { prefs.theme = theme; savePrefs(prefs); }
   }
   themeBtn.addEventListener('click', () => {
     const isDark = root.getAttribute('data-theme') === 'dark' ||
       (!root.hasAttribute('data-theme') && systemDark());
-    applyTheme(isDark ? 'light' : 'dark');
+    applyTheme(isDark ? 'light' : 'dark', true);
   });
-  applyTheme(prefs.theme || 'auto');
+  applyTheme(prefs.theme || 'auto', false);
 
   bar.hidden = false;
 }

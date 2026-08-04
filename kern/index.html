@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <!-- Inline, so the page never fires a 404 for /favicon.ico. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232f6f8f'/%3E%3Cpath d='M4.5 4h5l2.5 2.5V12a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5V4.5a.5.5 0 0 1 .5-.5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23C4563B'/%3E%3Cpath d='M4.5 4h5l2.5 2.5V12a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5V4.5a.5.5 0 0 1 .5-.5z' fill='%23fff'/%3E%3C/svg%3E">
 <!-- Deliberately generic: this file is public, so it must not leak the title of
      the document it unlocks. The real title is set from the manifest after the
      payload is decrypted. -->
@@ -24,32 +24,56 @@
 @font-face { font-family: 'RijksoverheidSans'; src: url('./fonts/rijksoverheidsanstext-regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
 @font-face { font-family: 'RijksoverheidSans'; src: url('./fonts/rijksoverheidsansheading-bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
 
+/* Palettes lifted verbatim from the newsreader (css/base.css) so a shared
+   analysis looks like the app it came from: warm charcoal greys in dark, warm
+   off-white in light, terracotta accent in both. */
 :root {
-  --bg: #f4f2ee;
-  --surface: #faf9f7;
-  --raised: #eceae4;
-  --text: #1c1b19;
-  --muted: #6d6a64;
-  --border: #dcd8d0;
-  --accent: #2f6f8f;
-  --on-accent: #ffffff;
-  --mark: #ffe08a;
-  --fs: 16px;
-  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --bg:        #F5F3EF;
+  --surface:   #FFFFFF;
+  --raised:    #EDEBE7;
+  --border:    #D8D5CF;
+  --text:      #1A1918;
+  --muted:     #6B6862;
+  --subtle:    #B0ADA6;
+  --accent:    #C4563B;
+  --body-text: #2E2D2A;
+  --body-em:   #3A3836;
+  --on-accent: #FFFFFF;
+  --mark:      #F6D98A;
+  --fs: 14px;
+  --font-stack: "RijksoverheidSans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 /* Dark by system preference, unless the reader explicitly chose light. An
    explicit data-theme always wins over the media query. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #17181a; --surface: #1e2023; --raised: #26292d;
-    --text: #e9e7e3; --muted: #9a978f; --border: #34383d;
-    --accent: #6fb0d4; --on-accent: #10171c; --mark: #6b5a1f;
+    --bg:        #262624;
+    --surface:   #2F2E2C;
+    --raised:    #3A3935;
+    --border:    #413F3B;
+    --text:      #F2F0EA;
+    --muted:     #8E8B82;
+    --subtle:    #54524E;
+    --accent:    #E07A5F;
+    --body-text: #D8D5CC;
+    --body-em:   #E6E3DB;
+    --on-accent: #262624;
+    --mark:      #6B5A2A;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #17181a; --surface: #1e2023; --raised: #26292d;
-  --text: #e9e7e3; --muted: #9a978f; --border: #34383d;
-  --accent: #6fb0d4; --on-accent: #10171c; --mark: #6b5a1f;
+  --bg:        #262624;
+  --surface:   #2F2E2C;
+  --raised:    #3A3935;
+  --border:    #413F3B;
+  --text:      #F2F0EA;
+  --muted:     #8E8B82;
+  --subtle:    #54524E;
+  --accent:    #E07A5F;
+  --body-text: #D8D5CC;
+  --body-em:   #E6E3DB;
+  --on-accent: #262624;
+  --mark:      #6B5A2A;
 }
 * { box-sizing: border-box; }
 /* --fs lives on <html> so every rem in this sheet follows the size control. */
@@ -71,35 +95,41 @@ body {
   border-bottom: 1px solid var(--border);
 }
 #topbar[hidden] { display: none; }
+/* Borderless, unfilled controls in muted ink — the newsreader's header idiom.
+   All of them sit at the right edge. */
 .topbar-inner {
-  max-width: 760px; margin: 0 auto; padding: 8px 20px;
-  display: flex; align-items: center; gap: 8px;
+  max-width: 760px; margin: 0 auto; padding: 6px 20px;
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
 }
 .tb-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  min-width: 34px; height: 32px; padding: 0 9px;
-  border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface); color: var(--text);
-  font: inherit; font-size: .8rem; font-weight: 600; line-height: 1;
-  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 28px; padding: 0 5px;
+  border: none; background: none; color: var(--muted);
+  font: inherit; font-size: .85rem; font-weight: 600; line-height: 1;
+  border-radius: 6px; cursor: pointer;
+  transition: color .12s ease, background .12s ease;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
-.tb-btn[disabled] { opacity: .4; cursor: default; }
-@media (hover: hover) { .tb-btn:not([disabled]):hover { border-color: var(--accent); color: var(--accent); } }
+.tb-btn[disabled] { opacity: .35; cursor: default; }
+.tb-btn:not([disabled]):active { background: color-mix(in srgb, var(--text) 10%, transparent); }
+@media (hover: hover) { .tb-btn:not([disabled]):hover { color: var(--accent); } }
 /* The two A's differ in size so the pair reads as a size control at a glance. */
-.tb-size { display: flex; gap: 4px; }
-.tb-size .tb-btn:first-child { font-size: .68rem; padding-top: 2px; }
-.tb-size .tb-btn:last-child { font-size: 1.1rem; }
+.tb-size { display: flex; align-items: center; gap: 2px; }
+.tb-size .tb-btn:first-child { font-size: .7rem; }
+.tb-size .tb-btn:last-child { font-size: 1.05rem; }
 #font-pick {
-  height: 32px; padding: 0 26px 0 9px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface) no-repeat right 8px center;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  color: var(--text); font: inherit; font-size: max(16px, .8rem); font-weight: 600;
+  height: 28px; padding: 0 18px 0 4px; border: none;
+  background: transparent no-repeat right 2px center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  color: var(--muted); font: inherit; font-size: .85rem; font-weight: 600;
   -webkit-appearance: none; appearance: none; cursor: pointer; max-width: 46vw;
+  -webkit-tap-highlight-color: transparent;
 }
-#font-pick:focus { outline: none; border-color: var(--accent); }
-#theme-toggle { margin-left: auto; }
+/* Only touch browsers zoom the page when focusing a <select> under 16px, so
+   keep the flat sizing on pointer devices. */
+@media (pointer: coarse) { #font-pick { font-size: max(16px, .85rem); } }
+#font-pick:focus { outline: none; color: var(--accent); }
 #theme-toggle svg { display: block; }
-.tb-spacer { flex: 1 1 auto; }
 
 /* ── unlock gate ─────────────────────────────────────────── */
 #gate {
@@ -131,8 +161,9 @@ body {
 }
 .gate-card button[disabled] { opacity: .55; cursor: default; }
 .gate-msg { margin-top: 12px; font-size: .82rem; min-height: 1.2em; }
-.gate-msg.err { color: #c0392b; }
-@media (prefers-color-scheme: dark) { .gate-msg.err { color: #ef8b7c; } }
+.gate-msg.err { color: #C4563B; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .gate-msg.err { color: #E07A5F; } }
+:root[data-theme="dark"] .gate-msg.err { color: #E07A5F; }
 
 /* ── document header ─────────────────────────────────────── */
 .doc-head { border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 18px; }
@@ -158,7 +189,7 @@ body {
 
 /* ── sections ────────────────────────────────────────────── */
 /* Opening paragraph — sits above the section controls, outside the sections. */
-.doc-lead { margin: 0 0 18px; }
+.doc-lead { margin: 0 0 18px; color: var(--body-text); }
 .doc-lead p { margin: 0 0 .95rem; }
 .doc-lead p:last-child { margin-bottom: 0; }
 .doc-lead ul { margin: .6rem 0 .95rem 1.3rem; padding: 0; }
@@ -194,7 +225,9 @@ body {
   transform-origin: 50% 45%;
 }
 .pdf-section[open] > .pdf-section-summary::before { transform: translateY(-50%) rotate(90deg); }
-.pdf-section-body { padding: 0 0 14px; }
+.pdf-section-body { padding: 0 0 14px; color: var(--body-text); }
+.pdf-section-body em, .pdf-section-body i, .doc-lead em, .doc-lead i { color: var(--body-em); }
+.pdf-section-body strong, .doc-lead strong { color: var(--text); }
 .pdf-section-body h4, .pdf-section-body h5 { margin: 16px 0 6px; font-size: .95rem; font-weight: 700; }
 .pdf-section-body p { margin: 0 0 .95rem; }
 .pdf-section-body ul { margin: .6rem 0 .95rem 1.3rem; padding: 0; }
@@ -323,14 +356,13 @@ mark.pdf-hit { background: var(--mark); color: inherit; border-radius: 2px; padd
       <button class="tb-btn" id="fs-up" type="button" aria-label="Grotere tekst">A</button>
     </div>
     <select id="font-pick" aria-label="Lettertype">
+      <option value="ro-sans">Rijksoverheid Sans</option>
       <option value="system">Systeem</option>
       <option value="inter">Inter</option>
       <option value="roboto">Roboto</option>
       <option value="open-sans">Open Sans</option>
       <option value="lato">Lato</option>
-      <option value="ro-sans">Rijksoverheid Sans</option>
     </select>
-    <span class="tb-spacer"></span>
     <button class="tb-btn" id="theme-toggle" type="button" aria-label="Donkere modus"></button>
   </div>
 </div>
