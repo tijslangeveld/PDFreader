@@ -351,6 +351,28 @@ function fmtDate(iso) {
   return d.getDate() + ' ' + mo[d.getMonth()] + ' ' + d.getFullYear();
 }
 
+// "claude-opus-5" → "Claude Opus 5"; "claude-sonnet-4-6" → "Claude Sonnet 4.6".
+// A trailing date stamp (claude-haiku-4-5-20251001) is dropped.
+function fmtModel(id) {
+  const parts = String(id || '').split('-').filter((x) => !/^\d{8}$/.test(x));
+  if (!parts.length) return '';
+  const words = [], nums = [];
+  for (const part of parts) {
+    if (/^\d+$/.test(part)) nums.push(part);
+    else words.push(part.charAt(0).toUpperCase() + part.slice(1));
+  }
+  return (words.join(' ') + (nums.length ? ' ' + nums.join('.') : '')).trim();
+}
+
+function fmtInt(n) { return Math.round(n).toLocaleString('nl-NL'); }
+
+// Rough page equivalent of the summary itself, from its word count. Printed
+// with a ~ because it is an estimate, not a rendered page count.
+function summaryPages(html) {
+  const words = String(html || '').replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.round(words / 450));
+}
+
 function render(data) {
   DOC_TITLE = data.title || '';
   document.title = data.title || 'PDF summary';
@@ -360,10 +382,18 @@ function render(data) {
   $('doc-title').textContent = data.title || 'PDF summary';
 
   const bits = [];
-  if (data.pageCount) bits.push(data.pageCount + ' pagina' + (data.pageCount === 1 ? '' : "'s"));
-  if (data.created_at) bits.push('geanalyseerd ' + fmtDate(data.created_at));
-  if (data.model) bits.push(data.model);
-  $('doc-meta').textContent = bits.join(' · ');
+  if (data.pageCount) {
+    bits.push("Origineel document: " + data.pageCount + ' pagina' + (data.pageCount === 1 ? '' : "'s"));
+  }
+  bits.push('Samenvatting: ~' + summaryPages(data.html) + " pagina's");
+  if (data.model) bits.push('Model: ' + fmtModel(data.model));
+  const tok = (data.inputTokens || 0) + (data.outputTokens || 0);
+  // Older analyses predate token accounting; estimate from the text so the line
+  // stays complete, and mark it with ~ so it is not read as a measured figure.
+  if (tok) bits.push('Tokens: ' + fmtInt(tok));
+  else if (data.html) bits.push('Tokens: ~' + fmtInt(data.html.replace(/<[^>]+>/g, ' ').length / 4));
+  if (data.created_at) bits.push(fmtDate(data.created_at));
+  $('doc-meta').textContent = bits.join('  |  ');
 
   const bodyEl = $('doc-body');
   const hasPdf = !!(MANIFEST.entries && MANIFEST.entries.source);
