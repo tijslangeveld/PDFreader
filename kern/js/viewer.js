@@ -15,6 +15,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.min.mjs', import.
 const $ = (id) => document.getElementById(id);
 const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
+let DOC_TITLE = '';    // set on unlock; used for the download filename
 let MANIFEST = null;   // plaintext: kdf params + per-entry IVs
 let KEY = null;        // derived CryptoKey, kept for the lazy PDF decrypt
 let PDFDOC = null;     // PDF.js document, loaded once
@@ -155,10 +156,13 @@ function citeToSup(html) {
     (m, pre, inner, pages) => (pre ? m : '<sup' + attrs(pages) + '>' + inner + '</sup>'));
 }
 
-// Split on <h3> headings into collapsible sections.
+// Split on <h3> headings into collapsible sections. Anything before the first
+// heading is the analysis' opening paragraph — returned separately so it can
+// stay above the collapse control instead of being buried by it.
 function wrapSections(html) {
   const parts = html.split(/(<h3[^>]*>[\s\S]*?<\/h3>)/i);
   const sections = [];
+  let lead = '';
   let current = null;
   for (const part of parts) {
     if (/^<h3[^>]*>/i.test(part)) {
@@ -167,23 +171,41 @@ function wrapSections(html) {
     } else if (current) {
       current.content += part;
     } else {
-      sections.push({ heading: null, content: part });
+      lead += part;
     }
   }
   if (current) sections.push(current);
-  return sections.map((sec) => sec.heading
-    ? '<details class="pdf-section" open><summary class="pdf-section-summary">' + sec.heading +
-      '</summary><div class="pdf-section-body">' + sec.content + '</div></details>'
-    : sec.content).join('');
+  // Collapsed by default: an analysis is long, and the headings are the map.
+  return {
+    lead: lead.trim(),
+    sections: sections.map((sec) =>
+      '<details class="pdf-section"><summary class="pdf-section-summary">' + sec.heading +
+      '</summary><div class="pdf-section-body">' + sec.content + '</div></details>').join(''),
+  };
 }
 
-function collapseAllBar() {
+// Chevrons pointing apart = "expand", pointing together = "collapse".
+const ICON_EXPAND = '<path d="M4 7l4-3 4 3"/><path d="M4 9l4 3 4-3"/>';
+const ICON_COLLAPSE = '<path d="M4 4l4 3 4-3"/><path d="M4 12l4-3 4 3"/>';
+const chevrons = (paths) =>
+  '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+
+// Sits directly above the collapsible sections, right-aligned. Sections start
+// collapsed, so the toggle starts as "expand all".
+function sectionsBar(hasPdf) {
   return '<div class="pdf-sections-bar">' +
-    '<button type="button" class="pdf-collapse-all" aria-label="Alle secties inklappen">' +
-      '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" ' +
-        'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-        '<path d="M4 4l4 3 4-3"/><path d="M4 12l4-3 4 3"/></svg>' +
-      '<span>Alles inklappen</span>' +
+    (hasPdf
+      ? '<button type="button" class="pdf-dl-src">' +
+          '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" ' +
+            'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M8 2v8"/><path d="M4.5 7L8 10.5 11.5 7"/><path d="M3 13h10"/></svg>' +
+          '<span>Download bron-PDF</span>' +
+        '</button>'
+      : '') +
+    '<button type="button" class="pdf-collapse-all" aria-label="Alle secties uitklappen">' +
+      chevrons(ICON_EXPAND) +
+      '<span>Alles uitklappen</span>' +
     '</button></div>';
 }
 
@@ -196,9 +218,129 @@ function wireCollapseAll(container) {
     let anyOpen = false;
     secs.forEach((s) => { if (s.open) anyOpen = true; });
     secs.forEach((s) => { s.open = !anyOpen; });
+    const expand = anyOpen; // we just collapsed them, so next action is expand
     const lbl = btn.querySelector('span');
-    if (lbl) lbl.textContent = anyOpen ? 'Alles uitklappen' : 'Alles inklappen';
+    if (lbl) lbl.textContent = expand ? 'Alles uitklappen' : 'Alles inklappen';
+    btn.setAttribute('aria-label', expand ? 'Alle secties uitklappen' : 'Alle secties inklappen');
+    const svg = btn.querySelector('svg');
+    if (svg) svg.innerHTML = expand ? ICON_EXPAND : ICON_COLLAPSE;
   });
+}
+
+// Download the decrypted source PDF. The bytes come from the PDF.js document so
+// there is no second copy of a large file in memory, and the first click pays
+// for the fetch + decrypt if no citation has been opened yet.
+function wireDownloadSource(container) {
+  const btn = container.querySelector('.pdf-dl-src');
+  if (!btn) return;
+  const lbl = btn.querySelector('span');
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const original = lbl.textContent;
+    lbl.textContent = 'Ontsleutelen…';
+    try {
+      const doc = await loadPdf();
+      const bytes = await doc.getData();
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (DOC_TITLE || 'bron').replace(/[^\w.\- ]+/g, '_').slice(0, 80) + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      lbl.textContent = original;
+    } catch (_) {
+      lbl.textContent = 'Mislukt — opnieuw';
+    }
+    btn.disabled = false;
+  });
+}
+
+// ── reading settings ────────────────────────────────────────
+// Text size, typeface and light/dark, persisted per origin so the choice
+// survives reloads and carries across bundles on the same host.
+
+const FS_STEPS = [13, 14, 15, 16, 17, 18, 20, 22];
+const FONT_STACKS = {
+  system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  inter: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+  roboto: '"Roboto", -apple-system, BlinkMacSystemFont, sans-serif',
+  'open-sans': '"Open Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+  lato: '"Lato", -apple-system, BlinkMacSystemFont, sans-serif',
+  'ro-sans': '"RijksoverheidSans", -apple-system, BlinkMacSystemFont, sans-serif',
+};
+const PREFS_KEY = 'pdfviewer.prefs';
+
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch (_) { return {}; }
+}
+function savePrefs(p) {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch (_) { /* private mode */ }
+}
+
+const SUN = '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">' +
+  '<circle cx="10" cy="10" r="3.6"/><path d="M10 2v1.8M10 16.2V18M18 10h-1.8M3.8 10H2M15.7 4.3l-1.3 1.3M5.6 14.4l-1.3 1.3M15.7 15.7l-1.3-1.3M5.6 5.6L4.3 4.3"/></svg>';
+const MOON = '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">' +
+  '<path d="M16.5 12.4A7 7 0 0 1 7.6 3.5a7 7 0 1 0 8.9 8.9z"/></svg>';
+
+function wireSettings() {
+  const prefs = loadPrefs();
+  const root = document.documentElement;
+  const bar = $('topbar');
+  const upBtn = $('fs-up');
+  const downBtn = $('fs-down');
+  const fontSel = $('font-pick');
+  const themeBtn = $('theme-toggle');
+
+  // Size ──
+  let fsIdx = FS_STEPS.indexOf(prefs.fs);
+  if (fsIdx === -1) fsIdx = FS_STEPS.indexOf(16);
+  function applyFs() {
+    root.style.setProperty('--fs', FS_STEPS[fsIdx] + 'px');
+    downBtn.disabled = fsIdx === 0;
+    upBtn.disabled = fsIdx === FS_STEPS.length - 1;
+    prefs.fs = FS_STEPS[fsIdx];
+    savePrefs(prefs);
+  }
+  upBtn.addEventListener('click', () => { if (fsIdx < FS_STEPS.length - 1) { fsIdx++; applyFs(); } });
+  downBtn.addEventListener('click', () => { if (fsIdx > 0) { fsIdx--; applyFs(); } });
+  applyFs();
+
+  // Typeface ──
+  function applyFont(name) {
+    const stack = FONT_STACKS[name] || FONT_STACKS.system;
+    root.style.setProperty('--font-stack', stack);
+    fontSel.value = FONT_STACKS[name] ? name : 'system';
+    prefs.font = fontSel.value;
+    savePrefs(prefs);
+  }
+  fontSel.addEventListener('change', () => applyFont(fontSel.value));
+  applyFont(prefs.font || 'system');
+
+  // Light / dark ──
+  // Until the reader picks one, follow the system: no data-theme attribute, so
+  // the prefers-color-scheme block in the stylesheet decides.
+  const systemDark = () => window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  function applyTheme(theme) {
+    if (theme === 'dark' || theme === 'light') root.setAttribute('data-theme', theme);
+    else root.removeAttribute('data-theme');
+    const isDark = theme === 'dark' || (theme !== 'light' && systemDark());
+    themeBtn.innerHTML = isDark ? SUN : MOON;
+    themeBtn.setAttribute('aria-label', isDark ? 'Lichte modus' : 'Donkere modus');
+    themeBtn.title = isDark ? 'Lichte modus' : 'Donkere modus';
+    prefs.theme = theme;
+    savePrefs(prefs);
+  }
+  themeBtn.addEventListener('click', () => {
+    const isDark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.hasAttribute('data-theme') && systemDark());
+    applyTheme(isDark ? 'light' : 'dark');
+  });
+  applyTheme(prefs.theme || 'auto');
+
+  bar.hidden = false;
 }
 
 function fmtDate(iso) {
@@ -209,10 +351,12 @@ function fmtDate(iso) {
 }
 
 function render(data) {
-  document.title = data.title || 'PDF-analyse';
+  DOC_TITLE = data.title || '';
+  document.title = data.title || 'PDF summary';
   $('gate').hidden = true;
   $('doc').hidden = false;
-  $('doc-title').textContent = data.title || 'PDF-analyse';
+  wireSettings();
+  $('doc-title').textContent = data.title || 'PDF summary';
 
   const bits = [];
   if (data.pageCount) bits.push(data.pageCount + ' pagina' + (data.pageCount === 1 ? '' : "'s"));
@@ -222,14 +366,20 @@ function render(data) {
 
   const bodyEl = $('doc-body');
   const hasPdf = !!(MANIFEST.entries && MANIFEST.entries.source);
-  bodyEl.innerHTML = collapseAllBar() +
-    '<div id="pdf-sections">' + (wrapSections(citeToSup(mdToHtml(data.html || ''))) || '<em>Geen inhoud.</em>') + '</div>';
+  const parts = wrapSections(citeToSup(mdToHtml(data.html || '')));
+  bodyEl.innerHTML =
+    (parts.lead ? '<div class="doc-lead">' + parts.lead + '</div>' : '') +
+    (parts.sections || hasPdf ? sectionsBar(hasPdf) : '') +
+    '<div id="pdf-sections">' + (parts.sections || parts.lead ? parts.sections : '<em>Geen inhoud.</em>') + '</div>';
 
   const sectionsEl = $('pdf-sections');
   wireCollapseAll(bodyEl);
+  wireDownloadSource(bodyEl);
   wireSearch(sectionsEl);
-  sectionsEl.classList.toggle('pdf-cites-live', hasPdf);
-  sectionsEl.addEventListener('click', (e) => {
+  // On bodyEl, not sectionsEl: the opening paragraph sits outside the sections
+  // and its citations must be clickable too.
+  bodyEl.classList.toggle('pdf-cites-live', hasPdf);
+  bodyEl.addEventListener('click', (e) => {
     const cite = e.target.closest && e.target.closest('.pdf-cite');
     if (!cite || !hasPdf) return;
     e.preventDefault();
@@ -431,6 +581,7 @@ function openPagePopup(page, pages) {
         '<button class="pdfpage-nav" data-dir="1" type="button" aria-label="Volgende pagina">&#8250;</button>' +
         '<button class="pdfpage-toggle" type="button">Toon tekst</button>' +
         '<a class="pdfpage-open" download>Open origineel</a>' +
+        '<button class="pdfpage-close-foot" type="button">Sluiten</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(ov);
@@ -450,6 +601,7 @@ function openPagePopup(page, pages) {
   }
   document.addEventListener('keydown', onKey);
   ov.querySelector('.pdfpage-close').addEventListener('click', close);
+  ov.querySelector('.pdfpage-close-foot').addEventListener('click', close);
   ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
 
   const body = ov.querySelector('.pdfpage-body');
