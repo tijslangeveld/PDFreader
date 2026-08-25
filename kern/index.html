@@ -40,7 +40,7 @@
   --body-em:   #3A3836;
   --on-accent: #FFFFFF;
   --mark:      #F6D98A;
-  --fs: 14px;
+  --fs: 12px;   /* the starting step; the size control moves it — see DEFAULT_FS */
   --font-stack: "RijksoverheidSans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 /* Dark by system preference, unless the reader explicitly chose light. An
@@ -172,7 +172,84 @@ body {
 .doc-title { margin: 8px 0 6px; font-size: 1.55rem; line-height: 1.2;
   font-weight: 700; letter-spacing: -.02em; }
 .doc-meta { font-size: .8rem; color: var(--muted); }
+/* Kicker left, button right, on the same line above the title. Both are short
+   single-line items, so centring them on that line is what reads as level. */
+.doc-head-row {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  min-height: 1.9rem;
+}
+.doc-head-row .doc-kicker { flex: 0 1 auto; min-width: 0; }
+.made-btn {
+  flex-shrink: 0; margin-left: auto;
+  padding: 5px 11px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface, transparent);
+  color: var(--muted); font: inherit; font-size: .72rem; font-weight: 600;
+}
+.made-btn:hover { color: var(--accent); border-color: var(--accent); }
+#made-overlay {
+  position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.5);
+  display: none; align-items: center; justify-content: center; padding: 24px 16px;
+}
+#made-overlay.open { display: flex; }
+/* Centred, not shoved up from the bottom: this is a reference panel you read
+   next to the article, not a sheet you dismiss with a thumb. */
+#made-panel {
+  width: 100%; max-width: 720px; max-height: min(88vh, 900px); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .28);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+@media (max-width: 560px) {
+  #made-overlay { padding: 12px 10px; }
+  #made-panel { max-height: 92vh; }
+}
+.made-head {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 13px 16px 10px; border-bottom: 1px solid var(--border);
+}
+.made-head strong { flex: 1; font-size: .88rem; }
+.made-x { background: none; border: none; font-size: 22px; color: var(--muted); cursor: pointer; }
+.made-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px 26px; }
+.made-sec {
+  font-size: .62rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--accent); margin: 16px 0 4px;
+}
+.made-row {
+  display: flex; gap: 10px; padding: 5px 0;
+  border-bottom: 1px solid var(--border); font-size: .75rem;
+}
+.made-row span:first-child { color: var(--muted); flex: 0 0 44%; }
+.made-row span:last-child { flex: 1; word-break: break-word; }
+.made-pre {
+  white-space: pre-wrap; word-break: break-word; font-size: .66rem; line-height: 1.5;
+  background: var(--surface, rgba(127,127,127,.08)); border: 1px solid var(--border);
+  border-radius: 7px; padding: 8px 10px; margin: 4px 0 0; max-height: 320px; overflow: auto;
+}
+.made-log { max-height: 60vh; }
+.made-note { font-size: .68rem; color: var(--muted); line-height: 1.5; margin: 4px 0 6px; }
+/* The documents that fell out, titles and all, read from the source list. */
+.made-sub { font-size: .72rem; font-weight: 600; margin: 10px 0 3px; }
+.made-docs {
+  max-height: 180px; overflow-y: auto; overscroll-behavior: contain;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.made-docs > div {
+  padding: 3px 7px; font-size: .64rem; line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+}
+.made-docs > div:last-child { border-bottom: none; }
+.made-docs a { color: inherit; text-decoration: none; }
+.made-docs a:hover { text-decoration: underline; }
+.made-docnum { color: var(--muted); }
+.made-skip {
+  max-height: 200px; overflow-y: auto; font-size: .66rem; line-height: 1.6; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px;
+}
+.made-figs { margin-top: 4px; }
 .doc-tools { display: flex; gap: 8px; align-items: center; margin: 14px 0 4px; flex-wrap: wrap; }
+/* Once moved into the sections bar it is one row with the collapse button:
+   search takes the space, the button keeps its size at the end. */
+.pdf-sections-bar .doc-tools { flex: 1 1 220px; margin: 0; min-width: 0; }
 .pdf-search-wrap { position: relative; flex: 1 1 220px; min-width: 180px; }
 #pdf-search-input {
   width: 100%; padding: 8px 30px 8px 11px; border: 1px solid var(--border);
@@ -195,9 +272,24 @@ body {
 .doc-lead ul { margin: .6rem 0 .95rem 1.3rem; padding: 0; }
 
 /* Controls directly above the collapsible sections, right-aligned. */
+/* Search and the fold control follow you down the page.
+   It sticks BELOW the settings bar, which is itself sticky at top:0 — hence the
+   measured offset rather than a guessed one (see --topbar-h). Its own z-index
+   sits under the settings bar and well under the panel overlay. */
 .pdf-sections-bar {
   display: flex; justify-content: flex-end; align-items: center;
-  gap: 8px; flex-wrap: wrap; margin: 0 0 6px;
+  gap: 8px; flex-wrap: wrap; margin: 18px 0 6px;
+  position: sticky; top: var(--topbar-h, 46px); z-index: 40;
+  padding: 8px 0 7px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(10px); backdrop-filter: saturate(180%) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+/* The blurred band should reach the edges of the reading column, not stop at
+   the text. .wrap pads by 20px at every width, so this mirrors exactly that —
+   a different number here would leave a strip of article showing through. */
+.pdf-sections-bar {
+  margin-left: -20px; margin-right: -20px; padding-left: 20px; padding-right: 20px;
 }
 .pdf-collapse-all, .pdf-dl-src {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
@@ -225,6 +317,12 @@ body {
   transform-origin: 50% 45%;
 }
 .pdf-section[open] > .pdf-section-summary::before { transform: translateY(-50%) rotate(90deg); }
+/* A section deliberately left unfolded — the introduction of a TK
+   meta-analysis. Same heading weight as a folded one, without the chevron. */
+h3.pdf-section-plain {
+  font-weight: 700; font-size: 1rem; color: var(--accent);
+  letter-spacing: -.01em; margin: 11px 0 6px; padding: 0;
+}
 .pdf-section-body { padding: 0 0 14px; color: var(--body-text); }
 .pdf-section-body em, .pdf-section-body i, .doc-lead em, .doc-lead i { color: var(--body-em); }
 .pdf-section-body strong, .doc-lead strong { color: var(--text); }
@@ -369,7 +467,12 @@ mark.pdf-hit { background: var(--mark); color: inherit; border-radius: 2px; padd
 
 <div class="wrap" id="doc" hidden>
   <div class="doc-head">
-    <div class="doc-kicker">PDF summary</div>
+    <!-- The kicker and, hard right on the same line, the way into how it was
+         made. Hidden unless the bundle actually carries that. -->
+    <div class="doc-head-row">
+      <div class="doc-kicker" id="doc-kicker">PDF summary</div>
+      <button type="button" class="made-btn" id="made-btn" hidden>Hoe deze analyse is gemaakt</button>
+    </div>
     <h1 class="doc-title" id="doc-title"></h1>
     <div class="doc-meta" id="doc-meta"></div>
     <div class="doc-tools">
@@ -402,5 +505,12 @@ setTimeout(function () {
     : 'De viewer kon niet geladen worden. Controleer of de map js/ volledig is meegekopieerd.';
 }, 4000);
 </script>
+  <div id="made-overlay">
+    <div id="made-panel">
+      <div class="made-head"><strong>Hoe deze analyse is gemaakt</strong>
+        <button class="made-x" id="made-x" aria-label="Sluiten">&times;</button></div>
+      <div class="made-body" id="made-body"></div>
+    </div>
+  </div>
 </body>
 </html>

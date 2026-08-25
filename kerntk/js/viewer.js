@@ -268,7 +268,10 @@ function wireDownloadSource(container) {
 // survives reloads and carries across bundles on the same host.
 
 const FS_STEPS = [11, 12, 13, 14, 15, 16, 17, 18, 20, 22];
-const DEFAULT_FS = 14;
+// Two steps down from where this started: 14px set the article wider and looser
+// than these documents want. A reader who prefers otherwise moves it back and
+// that choice is remembered — this is only where an unopened bundle begins.
+const DEFAULT_FS = 12;
 const DEFAULT_FONT = 'ro-sans';
 const FONT_STACKS = {
   system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -435,6 +438,20 @@ function render(data) {
     (parts.lead ? '<div class="doc-lead">' + parts.lead + '</div>' : '') +
     (parts.sections || hasPdf ? sectionsBar(hasPdf) : '') +
     '<div id="pdf-sections">' + (parts.sections || parts.lead ? parts.sections : '<em>Geen inhoud.</em>') + '</div>';
+
+  // How far down the sticky sections bar has to sit. The settings bar above it
+  // is sticky at top:0 and its height depends on the font and the wrapping, so
+  // it is measured rather than guessed — a hardcoded offset leaves a gap on one
+  // screen and an overlap on another.
+  const syncTopbarHeight = () => {
+    const tb = document.getElementById('topbar');
+    const h = tb && !tb.hidden ? tb.getBoundingClientRect().height : 0;
+    document.documentElement.style.setProperty('--topbar-h', Math.round(h) + 'px');
+  };
+  syncTopbarHeight();
+  window.addEventListener('resize', syncTopbarHeight);
+  // Fonts land after first paint and change the bar's height with them.
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncTopbarHeight).catch(() => {});
 
   // Search sits on the same row as the collapse-all button, directly above the
   // first section. MOVED rather than re-rendered: the input keeps its identity,
