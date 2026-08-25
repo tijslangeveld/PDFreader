@@ -159,7 +159,10 @@ function citeToSup(html) {
 // Split on <h3> headings into collapsible sections. Anything before the first
 // heading is the analysis' opening paragraph — returned separately so it can
 // stay above the collapse control instead of being buried by it.
-function wrapSections(html) {
+// keepOpen: a predicate on the heading text for a section that must NOT be
+// folded away. A TK meta-analysis puts its introduction under a heading of its
+// own, and an introduction you have to unfold is not an introduction.
+function wrapSections(html, keepOpen) {
   const parts = html.split(/(<h3[^>]*>[\s\S]*?<\/h3>)/i);
   const sections = [];
   let lead = '';
@@ -179,8 +182,10 @@ function wrapSections(html) {
   return {
     lead: lead.trim(),
     sections: sections.map((sec) =>
-      '<details class="pdf-section"><summary class="pdf-section-summary">' + sec.heading +
-      '</summary><div class="pdf-section-body">' + sec.content + '</div></details>').join(''),
+      (keepOpen && keepOpen(sec.heading)
+        ? '<h3 class="pdf-section-plain">' + sec.heading + '</h3>' + sec.content
+        : '<details class="pdf-section"><summary class="pdf-section-summary">' + sec.heading +
+          '</summary><div class="pdf-section-body">' + sec.content + '</div></details>')).join(''),
   };
 }
 
@@ -373,19 +378,42 @@ function summaryPages(html) {
   return Math.max(1, Math.round(words / 450));
 }
 
+const IS_INTRO = (h) => /^\s*(?:\d+[.)]\s*)?(?:inleiding|introductie|introduction)\b/i.test(h);
+
 function render(data) {
+  const isTk = data.kind === 'tk';
   DOC_TITLE = data.title || '';
-  document.title = data.title || 'PDF summary';
+  document.title = data.title || (isTk ? 'Tweede Kamer meta-analyse' : 'PDF summary');
   $('gate').hidden = true;
   $('doc').hidden = false;
   wireSettings();
-  $('doc-title').textContent = data.title || 'PDF summary';
+  // Only after unlock: the shell itself stays anonymous, so the URL still says
+  // nothing about what it points at.
+  // Named for what it is. The page ships with "PDF summary" in the markup, so a
+  // TK bundle that still shows that is running a viewer older than this line — the
+  // quickest way to tell a stale deployment from a broken one.
+  const kicker = $('doc-kicker');
+  if (kicker) kicker.textContent = isTk ? 'Tweede Kamer meta-analyse' : 'PDF summary';
+  // The markup ships with the PDF wording; a TK bundle searches an analysis.
+  const searchBox = $('pdf-search-input');
+  if (searchBox && isTk) searchBox.placeholder = 'Zoek in deze analyse…';
+  $('doc-title').textContent = data.title || (isTk ? 'Tweede Kamer meta-analyse' : 'PDF summary');
 
   const bits = [];
+  if (isTk) {
+    if (data.queries && data.queries.length) bits.push('Zoektermen: ' + data.queries.join(', '));
+    if (data.articleCount) bits.push(data.articleCount + ' parlementaire documenten');
+    if (data.dateFrom && data.dateTo) {
+      bits.push(data.dateFrom === data.dateTo ? data.dateFrom : data.dateFrom + ' – ' + data.dateTo);
+    }
+  }
   if (data.pageCount) {
     bits.push("Origineel document: " + data.pageCount + ' pagina' + (data.pageCount === 1 ? '' : "'s"));
   }
-  bits.push('Samenvatting: ~' + summaryPages(data.html) + " pagina's");
+  // "Samenvatting" described the wrong thing: this is how long the piece you are
+  // about to read is, not how much was summarised.
+  bits.push('Documentlengte: ~' + summaryPages(data.html) + " pagina's");
+  try { wireMadePanel(data); } catch (e) { console.warn('[viewer] made-panel:', e); }
   if (data.model) bits.push('Model: ' + fmtModel(data.model));
   const tok = (data.inputTokens || 0) + (data.outputTokens || 0);
   // Older analyses predate token accounting; estimate from the text so the line
@@ -397,7 +425,12 @@ function render(data) {
 
   const bodyEl = $('doc-body');
   const hasPdf = !!(MANIFEST.entries && MANIFEST.entries.source);
-  const parts = wrapSections(citeToSup(mdToHtml(data.html || '')));
+  // A TK analysis is already HTML and its references are [N] links into a
+  // source list, not page citations — so neither the markdown step nor the
+  // page-citation rewrite applies to it.
+  const parts = isTk
+    ? wrapSections(data.html || '', IS_INTRO)
+    : wrapSections(citeToSup(mdToHtml(data.html || '')));
   bodyEl.innerHTML =
     (parts.lead ? '<div class="doc-lead">' + parts.lead + '</div>' : '') +
     (parts.sections || hasPdf ? sectionsBar(hasPdf) : '') +
@@ -405,7 +438,8 @@ function render(data) {
 
   const sectionsEl = $('pdf-sections');
   wireCollapseAll(bodyEl);
-  wireDownloadSource(bodyEl);
+  if (!isTk) wireDownloadSource(bodyEl);
+  if (isTk) wireTkReferences(bodyEl);
   wireSearch(sectionsEl);
   // On bodyEl, not sectionsEl: the opening paragraph sits outside the sections
   // and its citations must be clickable too.
@@ -418,9 +452,38 @@ function render(data) {
     openPagePopup(parseInt(cite.getAttribute('data-page'), 10) || 1, pages);
   });
 
-  $('doc-foot').textContent = hasPdf
-    ? 'Klik op een paginaverwijzing om die pagina uit het originele PDF-document te bekijken.'
-    : 'Het originele PDF-document is niet meegeleverd; paginaverwijzingen zijn niet aanklikbaar.';
+  $('doc-foot').textContent = isTk
+    ? 'Klik op een verwijzing om het bijbehorende Kamerstuk op tweedekamer.nl te openen.'
+    : hasPdf
+      ? 'Klik op een paginaverwijzing om die pagina uit het originele PDF-document te bekijken.'
+      : 'Het originele PDF-document is niet meegeleverd; paginaverwijzingen zijn niet aanklikbaar.';
+}
+
+// [N] references in a TK analysis point at a numbered source list at the end of
+// the document. Send them straight to the document on tweedekamer.nl where the
+// list has a link, and otherwise open the section holding the list — which is
+// folded shut like every other section.
+function wireTkReferences(bodyEl) {
+  const urls = {};
+  bodyEl.querySelectorAll('li[id^="tkl-doc-"] > a[href]').forEach((a) => {
+    const m = a.parentNode.id.match(/^tkl-doc-(\d+)$/);
+    if (m) urls[m[1]] = a.getAttribute('href');
+  });
+  bodyEl.querySelectorAll('sup > a[href^="#tkl-doc-"]').forEach((a) => {
+    const n = (a.getAttribute('href').match(/#tkl-doc-(\d+)/) || [])[1];
+    if (n && urls[n]) {
+      a.setAttribute('href', urls[n]);
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener');
+    }
+  });
+  bodyEl.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href^="#tkl-doc-"]');
+    if (!a) return;
+    const target = bodyEl.querySelector(a.getAttribute('href'));
+    const det = target && target.closest('details.pdf-section');
+    if (det && !det.open) det.open = true;
+  });
 }
 
 // ── search ──────────────────────────────────────────────────
@@ -741,3 +804,104 @@ function openPagePopup(page, pages) {
 }
 
 boot();
+
+// ── Hoe deze analyse is gemaakt ──────────────────────────────────────────────
+// The reader's info panel, carried into the bundle. Everything here comes off
+// `madeOf`, which the exporter trims out of the analysis record — so a shared
+// link can be judged on how the piece was made, not only on what it says.
+// Absent from an older bundle, in which case the button never appears.
+function wireMadePanel(data) {
+  const made = data && data.madeOf;
+  const btn = document.getElementById('made-btn');
+  if (!btn || (!made && !data.runLog)) return;
+  btn.hidden = false;
+
+  const esc = (x) => String(x == null ? '' : x)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const nf = (n) => (Number(n) || 0).toLocaleString('nl-NL');
+  const row = (l, v) => v === null || v === undefined || v === ''
+    ? '' : '<div class="made-row"><span>' + esc(l) + '</span><span>' + esc(v) + '</span></div>';
+  const sec = (t) => '<div class="made-sec">' + esc(t) + '</div>';
+  const pre = (t, body) => !body ? ''
+    : '<div class="made-row" style="display:block"><span style="display:block;margin-bottom:3px">' +
+      esc(t) + '</span><pre class="made-pre">' + esc(body) + '</pre></div>';
+
+  let h = '';
+  if (made) {
+    h += sec('Over deze analyse');
+    if (made.queries && made.queries.length) h += row('Zoektermen', made.queries.join(', '));
+    const dc = made.docCounts;
+    if (dc) {
+      h += row('Documenten', nf(dc.found) + ' gevonden · ' + nf(dc.downloaded) + ' opgehaald · ' +
+        nf(dc.parsed) + ' met tekst · ' + nf(made.fetchedCount) + ' gebruikt');
+    } else if (made.fetchedCount) h += row('Documenten', nf(made.fetchedCount));
+    if (made.dateFrom && made.dateTo) h += row('Periode', made.dateFrom + ' – ' + made.dateTo);
+    if (made.words) h += row('Lengte', nf(made.words) + ' woorden');
+    if (made.tokens) h += row('Tokens', nf(made.tokens.input) + ' in · ' + nf(made.tokens.output) + ' uit');
+    if (made.length) h += row('Lengte-instelling', made.length);
+    if (made.articleCharCap) h += row('Tekstlimiet per document', nf(made.articleCharCap) + ' tekens');
+    if (made.batches) h += row('Batches', nf(made.batches));
+    if (made.reducePasses) h += row('Reductiepassen', nf(made.reducePasses));
+
+    const m = made.models || {};
+    if (m.summarize || m.final) {
+      h += sec('Modellen');
+      if (m.summarize) h += row('Samenvattingen', m.summarize);
+      if (m.final) h += row('Finale analyse', m.final);
+    }
+
+    if (made.coverage) {
+      const c = made.coverage;
+      h += sec('Dekking');
+      if (c.summarised !== undefined) h += row('In samenvattingen', nf(c.summarised));
+      if (c.cited !== undefined) h += row('Aangehaald in het artikel', nf(c.cited));
+    }
+
+    // The two figures about the making. Already rendered as self-contained
+    // inline-styled HTML by the server, so they need nothing from this page.
+    if (made.madeFigures) {
+      h += sec('Figuren');
+      h += '<div>' + made.madeFigures + '</div>';
+    }
+
+    const pr = made.prompts || {};
+    if (pr.sectionPrefix || (pr.sections && pr.sections.length) || pr.final) {
+      h += sec('Gebruikte prompts');
+      if (pr.mode === 'sections' && pr.sections && pr.sections.length) {
+        h += pre('Gedeelde sectie-instructie', pr.sectionPrefix);
+        pr.sections.forEach(function(x, i) {
+          h += pre('Sectie ' + (i + 1) + ': ' + (x.heading || ''), x.instruction);
+        });
+      } else if (pr.final) {
+        h += pre('Finale analyse prompt', pr.final);
+      }
+    }
+  }
+
+  // Rendered only when the button is pressed: the log is the one part that can
+  // be megabytes, and putting it in the DOM up front costs every reader.
+  let logDrawn = false;
+  if (data.runLog) {
+    h += sec('Logboek van de run');
+    h += '<div id="made-log-slot"><button type="button" class="made-btn" id="made-log-btn">Toon logboek (' +
+      Math.round(data.runLog.length / 1024) + ' kB)</button></div>';
+  }
+
+  const ov = document.getElementById('made-overlay');
+  const body = document.getElementById('made-body');
+  const open = function() {
+    body.innerHTML = h;
+    ov.classList.add('open');
+    const lb = document.getElementById('made-log-btn');
+    if (lb) lb.addEventListener('click', function() {
+      if (logDrawn) return;
+      logDrawn = true;
+      document.getElementById('made-log-slot').innerHTML =
+        '<pre class="made-pre made-log">' + esc(data.runLog) + '</pre>';
+    });
+  };
+  btn.addEventListener('click', open);
+  ov.addEventListener('click', function(e) {
+    if (e.target === ov || e.target.closest('#made-x')) ov.classList.remove('open');
+  });
+}

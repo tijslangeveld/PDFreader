@@ -172,6 +172,44 @@ body {
 .doc-title { margin: 8px 0 6px; font-size: 1.55rem; line-height: 1.2;
   font-weight: 700; letter-spacing: -.02em; }
 .doc-meta { font-size: .8rem; color: var(--muted); }
+.made-btn {
+  margin-top: 10px; padding: 5px 11px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface, transparent);
+  color: var(--muted); font: inherit; font-size: .72rem; font-weight: 600;
+}
+.made-btn:hover { color: var(--accent); border-color: var(--accent); }
+#made-overlay {
+  position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.5);
+  display: none; align-items: flex-end; justify-content: center;
+}
+#made-overlay.open { display: flex; }
+#made-panel {
+  width: 100%; max-width: 720px; max-height: 90vh; background: var(--bg);
+  border-radius: 14px 14px 0 0; display: flex; flex-direction: column; overflow: hidden;
+}
+.made-head {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 13px 16px 10px; border-bottom: 1px solid var(--border);
+}
+.made-head strong { flex: 1; font-size: .88rem; }
+.made-x { background: none; border: none; font-size: 22px; color: var(--muted); cursor: pointer; }
+.made-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px 26px; }
+.made-sec {
+  font-size: .62rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--accent); margin: 16px 0 4px;
+}
+.made-row {
+  display: flex; gap: 10px; padding: 5px 0;
+  border-bottom: 1px solid var(--border); font-size: .75rem;
+}
+.made-row span:first-child { color: var(--muted); flex: 0 0 44%; }
+.made-row span:last-child { flex: 1; word-break: break-word; }
+.made-pre {
+  white-space: pre-wrap; word-break: break-word; font-size: .66rem; line-height: 1.5;
+  background: var(--surface, rgba(127,127,127,.08)); border: 1px solid var(--border);
+  border-radius: 7px; padding: 8px 10px; margin: 4px 0 0; max-height: 320px; overflow: auto;
+}
+.made-log { max-height: 60vh; }
 .doc-tools { display: flex; gap: 8px; align-items: center; margin: 14px 0 4px; flex-wrap: wrap; }
 .pdf-search-wrap { position: relative; flex: 1 1 220px; min-width: 180px; }
 #pdf-search-input {
@@ -225,6 +263,12 @@ body {
   transform-origin: 50% 45%;
 }
 .pdf-section[open] > .pdf-section-summary::before { transform: translateY(-50%) rotate(90deg); }
+/* A section deliberately left unfolded — the introduction of a TK
+   meta-analysis. Same heading weight as a folded one, without the chevron. */
+h3.pdf-section-plain {
+  font-weight: 700; font-size: 1rem; color: var(--accent);
+  letter-spacing: -.01em; margin: 11px 0 6px; padding: 0;
+}
 .pdf-section-body { padding: 0 0 14px; color: var(--body-text); }
 .pdf-section-body em, .pdf-section-body i, .doc-lead em, .doc-lead i { color: var(--body-em); }
 .pdf-section-body strong, .doc-lead strong { color: var(--text); }
@@ -369,9 +413,11 @@ mark.pdf-hit { background: var(--mark); color: inherit; border-radius: 2px; padd
 
 <div class="wrap" id="doc" hidden>
   <div class="doc-head">
-    <div class="doc-kicker">PDF summary</div>
+    <div class="doc-kicker" id="doc-kicker">PDF summary</div>
     <h1 class="doc-title" id="doc-title"></h1>
     <div class="doc-meta" id="doc-meta"></div>
+    <!-- "How this analysis was made" — hidden unless the bundle carries it. -->
+    <button type="button" class="made-btn" id="made-btn" hidden>Hoe deze analyse is gemaakt</button>
     <div class="doc-tools">
       <div class="pdf-search-wrap">
         <input id="pdf-search-input" type="search" placeholder="Zoek in deze samenvatting…"
@@ -402,5 +448,12 @@ setTimeout(function () {
     : 'De viewer kon niet geladen worden. Controleer of de map js/ volledig is meegekopieerd.';
 }, 4000);
 </script>
+  <div id="made-overlay">
+    <div id="made-panel">
+      <div class="made-head"><strong>Hoe deze analyse is gemaakt</strong>
+        <button class="made-x" id="made-x" aria-label="Sluiten">&times;</button></div>
+      <div class="made-body" id="made-body"></div>
+    </div>
+  </div>
 </body>
 </html>
