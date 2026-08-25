@@ -188,12 +188,20 @@ body {
 .made-btn:hover { color: var(--accent); border-color: var(--accent); }
 #made-overlay {
   position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.5);
-  display: none; align-items: flex-end; justify-content: center;
+  display: none; align-items: center; justify-content: center; padding: 24px 16px;
 }
 #made-overlay.open { display: flex; }
+/* Centred, not shoved up from the bottom: this is a reference panel you read
+   next to the article, not a sheet you dismiss with a thumb. */
 #made-panel {
-  width: 100%; max-width: 720px; max-height: 90vh; background: var(--bg);
-  border-radius: 14px 14px 0 0; display: flex; flex-direction: column; overflow: hidden;
+  width: 100%; max-width: 720px; max-height: min(88vh, 900px); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .28);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+@media (max-width: 560px) {
+  #made-overlay { padding: 12px 10px; }
+  #made-panel { max-height: 92vh; }
 }
 .made-head {
   display: flex; align-items: center; gap: 8px; flex-shrink: 0;
@@ -219,18 +227,29 @@ body {
 }
 .made-log { max-height: 60vh; }
 .made-note { font-size: .68rem; color: var(--muted); line-height: 1.5; margin: 4px 0 6px; }
-/* Document numbers point into the article's own source list. */
-.made-nums { display: flex; flex-wrap: wrap; gap: 3px; max-height: 150px; overflow-y: auto; }
-.made-nums span {
-  font-size: .62rem; padding: 1px 5px; border-radius: 4px;
-  border: 1px solid var(--border); color: var(--muted);
+/* The documents that fell out, titles and all, read from the source list. */
+.made-sub { font-size: .72rem; font-weight: 600; margin: 10px 0 3px; }
+.made-docs {
+  max-height: 180px; overflow-y: auto; overscroll-behavior: contain;
+  border: 1px solid var(--border); border-radius: 6px;
 }
+.made-docs > div {
+  padding: 3px 7px; font-size: .64rem; line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+}
+.made-docs > div:last-child { border-bottom: none; }
+.made-docs a { color: inherit; text-decoration: none; }
+.made-docs a:hover { text-decoration: underline; }
+.made-docnum { color: var(--muted); }
 .made-skip {
   max-height: 200px; overflow-y: auto; font-size: .66rem; line-height: 1.6; color: var(--muted);
   border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px;
 }
 .made-figs { margin-top: 4px; }
 .doc-tools { display: flex; gap: 8px; align-items: center; margin: 14px 0 4px; flex-wrap: wrap; }
+/* Once moved into the sections bar it is one row with the collapse button:
+   search takes the space, the button keeps its size at the end. */
+.pdf-sections-bar .doc-tools { flex: 1 1 220px; margin: 0; min-width: 0; }
 .pdf-search-wrap { position: relative; flex: 1 1 220px; min-width: 180px; }
 #pdf-search-input {
   width: 100%; padding: 8px 30px 8px 11px; border: 1px solid var(--border);
@@ -255,7 +274,7 @@ body {
 /* Controls directly above the collapsible sections, right-aligned. */
 .pdf-sections-bar {
   display: flex; justify-content: flex-end; align-items: center;
-  gap: 8px; flex-wrap: wrap; margin: 0 0 6px;
+  gap: 8px; flex-wrap: wrap; margin: 18px 0 6px;
 }
 .pdf-collapse-all, .pdf-dl-src {
   display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;

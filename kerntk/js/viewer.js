@@ -436,6 +436,13 @@ function render(data) {
     (parts.sections || hasPdf ? sectionsBar(hasPdf) : '') +
     '<div id="pdf-sections">' + (parts.sections || parts.lead ? parts.sections : '<em>Geen inhoud.</em>') + '</div>';
 
+  // Search sits on the same row as the collapse-all button, directly above the
+  // first section. MOVED rather than re-rendered: the input keeps its identity,
+  // so everything already wired to it by id stays wired.
+  const tools = document.querySelector('.doc-tools');
+  const bar = bodyEl.querySelector('.pdf-sections-bar');
+  if (tools && bar) bar.insertBefore(tools, bar.firstChild);
+
   const sectionsEl = $('pdf-sections');
   wireCollapseAll(bodyEl);
   if (!isTk) wireDownloadSource(bodyEl);
@@ -878,21 +885,42 @@ function wireMadePanel(data) {
       (m.finalCtx ? ' van ~' + nf(m.finalCtx) : ''));
     if (fr.totalChars) row('Brontekst totaal', nf(fr.totalChars) + ' tekens');
 
-    // Which documents fell out, and where. The numbers point into the article's
-    // own source list, which is on this page — so the titles come from there
-    // rather than being stored a second time.
+    // Which documents fell out, and where — with their titles.
+    //
+    // The titles are not stored on the record: the article's own source list is
+    // already on this page and already carries every document with its number,
+    // title and link, so they are read back out of the DOM. Keeping a second
+    // copy of nine hundred titles in the bundle would double it for nothing.
     const cov = made.coverage || {};
     const ns = cov.notSummarised || [], nc = cov.notCited || [];
     if (ns.length || nc.length) {
+      const docs = {};
+      document.querySelectorAll('#doc-body li[id^="tkl-doc-"]').forEach((li) => {
+        const n = (li.id.match(/^tkl-doc-(\d+)$/) || [])[1];
+        if (!n) return;
+        const a = li.querySelector('a[href]');
+        docs[n] = {
+          text: (li.textContent || '').replace(/\s+/g, ' ').trim(),
+          url: a ? a.getAttribute('href') : '',
+        };
+      });
       sec('Wat er buiten viel');
-      raw('<div class="made-note">De nummers verwijzen naar de bronnenlijst onderaan het artikel.</div>');
+      raw('<div class="made-note">Opgehaald en meegegeven aan het samenvatten, maar daarna niet meer ' +
+        'terug te vinden. De eerste groep haalde de samenvattingen niet; de tweede wel, maar wordt in ' +
+        'het artikel niet genoemd.</div>');
       const list = (label, nums) => {
-        if (!nums.length) return;
-        raw('<div class="made-row" style="display:block">' +
-          '<span style="display:block;margin-bottom:3px">' + esc(label) + ' (' + nf(nums.length) + ')</span>' +
-          '<div class="made-nums">' + nums.map((x) => '<span>' + esc(x) + '</span>').join('') + '</div></div>');
+        raw('<div class="made-sub">' + esc(label) + ' (' + nf(nums.length) + ')</div>');
+        if (!nums.length) { raw('<div class="made-note">Geen.</div>'); return; }
+        raw('<div class="made-docs">' + nums.map((n) => {
+          const d = docs[String(n)] || {};
+          const body = '<span class="made-docnum">[' + esc(n) + ']</span> ' +
+            esc(d.text || ('document ' + n));
+          return '<div>' + (d.url
+            ? '<a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + body + '</a>'
+            : body) + '</div>';
+        }).join('') + '</div>');
       };
-      list('Niet in de samenvattingen terechtgekomen', ns);
+      list('Niet in de samenvattingen', ns);
       list('Wel samengevat, niet aangehaald in het artikel', nc);
     }
 
