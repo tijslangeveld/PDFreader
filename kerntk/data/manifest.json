@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "cipher": "AES-GCM",
+  "kdf": {
+    "name": "PBKDF2",
+    "hash": "SHA-256",
+    "iterations": 310000,
+    "salt": "Shfnh+vDf3wrzZi8Az2/UA=="
+  },
+  "entries": {
+    "analysis": {
+      "iv": "U6ryFgczRfrujpXd",
+      "bytes": 588205
+    }
+  }
+}
