@@ -172,10 +172,23 @@ body {
 .doc-title { margin: 8px 0 6px; font-size: 1.55rem; line-height: 1.2;
   font-weight: 700; letter-spacing: -.02em; }
 .doc-meta { font-size: .8rem; color: var(--muted); }
+/* Title left, button right, on one line. The title takes the space and may
+   wrap; the button never shrinks and never squeezes it. */
+.doc-title-row {
+  display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;
+}
+.doc-title-row .doc-title { flex: 1 1 20ch; min-width: 0; }
 .made-btn {
-  margin-top: 10px; padding: 5px 11px; border-radius: 7px; cursor: pointer;
+  flex-shrink: 0; margin-left: auto;
+  /* Optically level with the FIRST line of the title, not centred on its box. */
+  margin-top: 14px;
+  padding: 5px 11px; border-radius: 7px; cursor: pointer;
   border: 1px solid var(--border); background: var(--surface, transparent);
   color: var(--muted); font: inherit; font-size: .72rem; font-weight: 600;
+}
+@media (max-width: 560px) {
+  /* Rather than crushing a nine-word label against a wrapped title. */
+  .made-btn { margin-top: 2px; }
 }
 .made-btn:hover { color: var(--accent); border-color: var(--accent); }
 #made-overlay {
@@ -414,10 +427,13 @@ mark.pdf-hit { background: var(--mark); color: inherit; border-radius: 2px; padd
 <div class="wrap" id="doc" hidden>
   <div class="doc-head">
     <div class="doc-kicker" id="doc-kicker">PDF summary</div>
-    <h1 class="doc-title" id="doc-title"></h1>
+    <!-- The title and, hard right on the same line, the way into how it was
+         made. Hidden unless the bundle actually carries that. -->
+    <div class="doc-title-row">
+      <h1 class="doc-title" id="doc-title"></h1>
+      <button type="button" class="made-btn" id="made-btn" hidden>Hoe deze analyse is gemaakt</button>
+    </div>
     <div class="doc-meta" id="doc-meta"></div>
-    <!-- "How this analysis was made" — hidden unless the bundle carries it. -->
-    <button type="button" class="made-btn" id="made-btn" hidden>Hoe deze analyse is gemaakt</button>
     <div class="doc-tools">
       <div class="pdf-search-wrap">
         <input id="pdf-search-input" type="search" placeholder="Zoek in deze samenvatting…"
