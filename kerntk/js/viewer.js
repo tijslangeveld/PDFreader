@@ -826,6 +826,13 @@ function wireMadePanel(data) {
   const esc = (x) => String(x == null ? '' : x)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const nf = (n) => (Number(n) || 0).toLocaleString('nl-NL');
+
+  // Built when the panel is opened, not when it is wired.
+  //
+  // "Wat er buiten viel" reads document titles out of the article's own source
+  // list, and that list is put on the page AFTER this runs — so building here
+  // found nothing and every entry fell back to "document 12".
+  const build = () => {
   const rows = [];
   const row = (l, v) => {
     if (v === null || v === undefined || v === '') return;
@@ -959,7 +966,6 @@ function wireMadePanel(data) {
     if (made.madeFigures) raw('<div class="made-figs">' + made.madeFigures + '</div>');
   }
 
-  let logDrawn = false;
   if (data.runLog) {
     sec('Logboek van de run');
     raw('<div id="made-log-slot"><button type="button" class="made-btn" id="made-log-btn">Toon logboek (' +
@@ -967,14 +973,17 @@ function wireMadePanel(data) {
   }
 
   // Drop any heading with nothing under it.
-  const h = rows.filter((r, i) => !/data-sec/.test(r) ||
+  return rows.filter((r, i) => !/data-sec/.test(r) ||
     (rows[i + 1] !== undefined && !/data-sec/.test(rows[i + 1]))).join('');
+  };
 
   const ov = document.getElementById('made-overlay');
   const body = document.getElementById('made-body');
   const open = () => {
-    body.innerHTML = h;
+    body.innerHTML = build();
     ov.classList.add('open');
+    // Re-wired every time, because the slot is rebuilt every time.
+    let logDrawn = false;
     const lb = document.getElementById('made-log-btn');
     if (lb) lb.addEventListener('click', () => {
       if (logDrawn) return;
