@@ -279,10 +279,14 @@ body {
 .pdf-sections-bar {
   display: flex; justify-content: flex-end; align-items: center;
   gap: 8px; flex-wrap: wrap; margin: 18px 0 6px;
-  position: sticky; top: var(--topbar-h, 46px); z-index: 40;
-  padding: 8px 0 7px;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  -webkit-backdrop-filter: saturate(180%) blur(10px); backdrop-filter: saturate(180%) blur(10px);
+  /* One pixel of overlap, because the two offsets are rounded independently and
+     a fractional topbar height leaves a hairline the article scrolls through. */
+  position: sticky; top: calc(var(--topbar-h, 46px) - 1px); z-index: 40;
+  padding: 9px 0 8px;
+  /* Opaque, not translucent. A blurred 92% band still lets a line of article
+     read through it, which is exactly what it is there to prevent — and the
+     strip above it is the one place two sticky bars can leave a gap. */
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
 /* The blurred band should reach the edges of the reading column, not stop at

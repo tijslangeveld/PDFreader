@@ -443,15 +443,21 @@ function render(data) {
   // is sticky at top:0 and its height depends on the font and the wrapping, so
   // it is measured rather than guessed — a hardcoded offset leaves a gap on one
   // screen and an overlap on another.
+  const topbarEl = document.getElementById('topbar');
   const syncTopbarHeight = () => {
-    const tb = document.getElementById('topbar');
-    const h = tb && !tb.hidden ? tb.getBoundingClientRect().height : 0;
-    document.documentElement.style.setProperty('--topbar-h', Math.round(h) + 'px');
+    const h = topbarEl && !topbarEl.hidden ? topbarEl.getBoundingClientRect().height : 0;
+    // Ceil, never round: half a pixel short is a hairline of article showing
+    // between the two bars.
+    document.documentElement.style.setProperty('--topbar-h', Math.ceil(h) + 'px');
   };
   syncTopbarHeight();
   window.addEventListener('resize', syncTopbarHeight);
   // Fonts land after first paint and change the bar's height with them.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncTopbarHeight).catch(() => {});
+  // And anything else that changes it — the font picker, the size control, a
+  // rotation, the controls wrapping onto two rows. Watching the element covers
+  // every cause at once instead of one event listener per cause.
+  if (topbarEl && window.ResizeObserver) new window.ResizeObserver(syncTopbarHeight).observe(topbarEl);
 
   // Search sits on the same row as the collapse-all button, directly above the
   // first section. MOVED rather than re-rendered: the input keeps its identity,
