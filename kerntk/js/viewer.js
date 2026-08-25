@@ -819,81 +819,136 @@ function wireMadePanel(data) {
   const esc = (x) => String(x == null ? '' : x)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const nf = (n) => (Number(n) || 0).toLocaleString('nl-NL');
-  const row = (l, v) => v === null || v === undefined || v === ''
-    ? '' : '<div class="made-row"><span>' + esc(l) + '</span><span>' + esc(v) + '</span></div>';
-  const sec = (t) => '<div class="made-sec">' + esc(t) + '</div>';
-  const pre = (t, body) => !body ? ''
-    : '<div class="made-row" style="display:block"><span style="display:block;margin-bottom:3px">' +
-      esc(t) + '</span><pre class="made-pre">' + esc(body) + '</pre></div>';
+  const rows = [];
+  const row = (l, v) => {
+    if (v === null || v === undefined || v === '') return;
+    rows.push('<div class="made-row"><span>' + esc(l) + '</span><span>' + esc(v) + '</span></div>');
+  };
+  // A heading is only worth drawing if something follows it — the first version
+  // of this panel printed "DEKKING" and "FIGUREN" over nothing at all.
+  const sec = (t) => rows.push('<div class="made-sec" data-sec>' + esc(t) + '</div>');
+  const raw = (h) => rows.push(h);
+  const pre = (t, body) => {
+    if (!body) return;
+    raw('<div class="made-row" style="display:block"><span style="display:block;margin-bottom:3px">' +
+      esc(t) + '</span><pre class="made-pre">' + esc(body) + '</pre></div>');
+  };
+  const modelLine = (id, local, ctx) =>
+    (id || '?') + (local ? ' (lokaal' : ' (cloud') + (ctx ? ', context ~' + nf(ctx) + ' tok)' : ')');
 
-  let h = '';
+  const m = (made && made.models) || {};
+  const fr = (made && made.fitReport) || {};
+  const dc = made && made.docCounts;
+
   if (made) {
-    h += sec('Over deze analyse');
-    if (made.queries && made.queries.length) h += row('Zoektermen', made.queries.join(', '));
-    const dc = made.docCounts;
-    if (dc) {
-      h += row('Documenten', nf(dc.found) + ' gevonden · ' + nf(dc.downloaded) + ' opgehaald · ' +
-        nf(dc.parsed) + ' met tekst · ' + nf(made.fetchedCount) + ' gebruikt');
-    } else if (made.fetchedCount) h += row('Documenten', nf(made.fetchedCount));
-    if (made.dateFrom && made.dateTo) h += row('Periode', made.dateFrom + ' – ' + made.dateTo);
-    if (made.words) h += row('Lengte', nf(made.words) + ' woorden');
-    if (made.tokens) h += row('Tokens', nf(made.tokens.input) + ' in · ' + nf(made.tokens.output) + ' uit');
-    if (made.length) h += row('Lengte-instelling', made.length);
-    if (made.articleCharCap) h += row('Tekstlimiet per document', nf(made.articleCharCap) + ' tekens');
-    if (made.batches) h += row('Batches', nf(made.batches));
-    if (made.reducePasses) h += row('Reductiepassen', nf(made.reducePasses));
+    sec('Opdracht');
+    if (made.queries && made.queries.length) row('Zoektermen', made.queries.join(', '));
+    if (made.language) row('Taal', made.language === 'en' ? 'Engels' : 'Nederlands');
+    if (made.period && made.period.label) row('Periode documenten', made.period.label);
+    row('Documenten', dc
+      ? nf(dc.found) + ' gevonden · ' + nf(dc.downloaded) + ' opgehaald · ' +
+        nf(dc.parsed) + ' met tekst · ' + nf(made.fetchedCount) + ' gebruikt'
+      : (made.fetchedCount ? nf(made.fetchedCount) : null));
+    if (made.dateFrom && made.dateTo) row('Periode', made.dateFrom + ' – ' + made.dateTo);
+    if (made.words) row('Lengte artikel', nf(made.words) + ' woorden');
+    if (made.tokens) row('Tokens totaal', nf(made.tokens.input) + ' in · ' + nf(made.tokens.output) + ' uit');
+    if (made.durationMs) row('Duur', Math.round(made.durationMs / 60000) + ' min');
 
-    const m = made.models || {};
-    if (m.summarize || m.final) {
-      h += sec('Modellen');
-      if (m.summarize) h += row('Samenvattingen', m.summarize);
-      if (m.final) h += row('Finale analyse', m.final);
+    sec('Instellingen');
+    if (made.length) row('Lengte-instelling', made.length);
+    if (made.articleCharCap) row('Tekstlimiet per document', nf(made.articleCharCap) + ' tekens');
+    if (made.pages) row("Zoekpagina's per bron", nf(made.pages));
+    if (made.maxCloudContextTokens) row('Contextlimiet cloud', nf(made.maxCloudContextTokens) + ' tok');
+
+    sec('Modellen');
+    if (m.summarize) row('Samenvattingen', modelLine(m.summarize, m.summarizeLocal, m.summarizeCtx));
+    if (m.final) row('Finale analyse', modelLine(m.final, m.finalLocal, m.finalCtx));
+    if (made.promptTranslation && made.promptTranslation.model)
+      row('Prompts vertaald via', made.promptTranslation.model);
+    if (made.polish && made.polish.applied)
+      row('Naredactie', made.polish.model + (made.polish.dutch ? ' (Nederlands)' : ' (Engels)'));
+
+    sec('Verloop en contextbudget');
+    row('Schrijfwijze', made.sectioned ? 'sectie voor sectie' : 'in één keer');
+    if (made.batches) row('Batches samengevat', nf(made.batches));
+    if (made.reducePasses) row('Reductiepassen', nf(made.reducePasses));
+    if (fr.perBatchTok) row('Doel per batch', '~' + nf(fr.perBatchTok) + ' tok');
+    if (fr.inputBudgetTok) row('Budget-opbouw', '~' + nf(fr.inputBudgetTok) + ' tok invoerruimte');
+    if (fr.finalPromptTok) row('Finale prompt', '~' + nf(fr.finalPromptTok) + ' tok' +
+      (m.finalCtx ? ' van ~' + nf(m.finalCtx) : ''));
+    if (fr.totalChars) row('Brontekst totaal', nf(fr.totalChars) + ' tekens');
+
+    // Which documents fell out, and where. The numbers point into the article's
+    // own source list, which is on this page — so the titles come from there
+    // rather than being stored a second time.
+    const cov = made.coverage || {};
+    const ns = cov.notSummarised || [], nc = cov.notCited || [];
+    if (ns.length || nc.length) {
+      sec('Wat er buiten viel');
+      raw('<div class="made-note">De nummers verwijzen naar de bronnenlijst onderaan het artikel.</div>');
+      const list = (label, nums) => {
+        if (!nums.length) return;
+        raw('<div class="made-row" style="display:block">' +
+          '<span style="display:block;margin-bottom:3px">' + esc(label) + ' (' + nf(nums.length) + ')</span>' +
+          '<div class="made-nums">' + nums.map((x) => '<span>' + esc(x) + '</span>').join('') + '</div></div>');
+      };
+      list('Niet in de samenvattingen terechtgekomen', ns);
+      list('Wel samengevat, niet aangehaald in het artikel', nc);
     }
 
-    if (made.coverage) {
-      const c = made.coverage;
-      h += sec('Dekking');
-      if (c.summarised !== undefined) h += row('In samenvattingen', nf(c.summarised));
-      if (c.cited !== undefined) h += row('Aangehaald in het artikel', nf(c.cited));
+    if (made.skippedArticles && made.skippedArticles.length) {
+      sec('Niet meegenomen');
+      raw('<div class="made-note">' + nf(made.skippedArticles.length) +
+        ' document(en) zonder bruikbare tekst.</div>');
+      raw('<div class="made-skip">' + made.skippedArticles.slice(0, 200).map((x) =>
+        '<div>' + esc(x.title || x.url || '?') + (x.reason ? ' — ' + esc(x.reason) : '') + '</div>').join('') +
+        '</div>');
     }
 
-    // The two figures about the making. Already rendered as self-contained
-    // inline-styled HTML by the server, so they need nothing from this page.
-    if (made.madeFigures) {
-      h += sec('Figuren');
-      h += '<div>' + made.madeFigures + '</div>';
+    if (made.sectionStats && made.sectionStats.length) {
+      sec('Lengte per sectie');
+      made.sectionStats.forEach((x) => row(x.heading || '?',
+        (x.words ? nf(x.words) + ' woorden' : '') +
+        (x.minWords ? ' (ondergrens ' + nf(x.minWords) + ')' : '')));
     }
 
+    // Both prompts: the one that summarised every batch and the one that wrote
+    // the article. The batch prompt was missing here entirely.
     const pr = made.prompts || {};
-    if (pr.sectionPrefix || (pr.sections && pr.sections.length) || pr.final) {
-      h += sec('Gebruikte prompts');
+    if (pr.batch || pr.sectionPrefix || (pr.sections && pr.sections.length) || pr.final) {
+      sec('Gebruikte prompts');
+      pre('Batch-samenvatting prompt', pr.batch);
       if (pr.mode === 'sections' && pr.sections && pr.sections.length) {
-        h += pre('Gedeelde sectie-instructie', pr.sectionPrefix);
-        pr.sections.forEach(function(x, i) {
-          h += pre('Sectie ' + (i + 1) + ': ' + (x.heading || ''), x.instruction);
-        });
+        pre('Gedeelde sectie-instructie', pr.sectionPrefix);
+        pr.sections.forEach((x, i) => pre('Sectie ' + (i + 1) + ': ' + (x.heading || ''), x.instruction));
       } else if (pr.final) {
-        h += pre('Finale analyse prompt', pr.final);
+        pre(pr.mode === 'single' ? 'Finale analyse prompt (integraal)' : 'Finale analyse prompt', pr.final);
       }
     }
+
+    // The server already wraps these in their own captioned block, so this
+    // section gets no heading of its own — that was the duplicated "FIGUREN".
+    if (made.madeFigures) raw('<div class="made-figs">' + made.madeFigures + '</div>');
   }
 
-  // Rendered only when the button is pressed: the log is the one part that can
-  // be megabytes, and putting it in the DOM up front costs every reader.
   let logDrawn = false;
   if (data.runLog) {
-    h += sec('Logboek van de run');
-    h += '<div id="made-log-slot"><button type="button" class="made-btn" id="made-log-btn">Toon logboek (' +
-      Math.round(data.runLog.length / 1024) + ' kB)</button></div>';
+    sec('Logboek van de run');
+    raw('<div id="made-log-slot"><button type="button" class="made-btn" id="made-log-btn">Toon logboek (' +
+      Math.round(data.runLog.length / 1024) + ' kB)</button></div>');
   }
+
+  // Drop any heading with nothing under it.
+  const h = rows.filter((r, i) => !/data-sec/.test(r) ||
+    (rows[i + 1] !== undefined && !/data-sec/.test(rows[i + 1]))).join('');
 
   const ov = document.getElementById('made-overlay');
   const body = document.getElementById('made-body');
-  const open = function() {
+  const open = () => {
     body.innerHTML = h;
     ov.classList.add('open');
     const lb = document.getElementById('made-log-btn');
-    if (lb) lb.addEventListener('click', function() {
+    if (lb) lb.addEventListener('click', () => {
       if (logDrawn) return;
       logDrawn = true;
       document.getElementById('made-log-slot').innerHTML =
@@ -901,7 +956,7 @@ function wireMadePanel(data) {
     });
   };
   btn.addEventListener('click', open);
-  ov.addEventListener('click', function(e) {
+  ov.addEventListener('click', (e) => {
     if (e.target === ov || e.target.closest('#made-x')) ov.classList.remove('open');
   });
 }
