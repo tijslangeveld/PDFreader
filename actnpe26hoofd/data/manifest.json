@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "cipher": "AES-GCM",
+  "bundleId": "a5cb8ac0d6c4",
+  "kdf": {
+    "name": "PBKDF2",
+    "hash": "SHA-256",
+    "iterations": 310000,
+    "salt": "kGgNWKam91OEqOyzI4JpWA=="
+  },
+  "entries": {
+    "analysis": {
+      "iv": "i8K9I6S/ijksVT8o",
+      "bytes": 28173
+    },
+    "source": {
+      "iv": "sLbXlGx12s1pgjO+",
+      "bytes": 4099034
+    }
+  }
+}
