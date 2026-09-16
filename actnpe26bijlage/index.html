@@ -491,9 +491,20 @@ h3.pdf-section-plain {
 mark.pdf-hit { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
 
 /* ── citations ───────────────────────────────────────────── */
+/* EVERY superscript, not only the ones the citation pass recognised.
+   `line-height: 0` is what stops a raised inline box from making its line
+   taller than the lines around it — without it a <sup> inherits the body's
+   1.8 and the row it sits on grows. The app does exactly this on
+   `.article-body sup`, and the rule has to be as broad here: a TK reference,
+   a page range the regex did not match, a footnote the model wrote — none of
+   them carry .pdf-cite, and each would stretch its own line. */
+sup { vertical-align: super; line-height: 0; font-size: .72em; }
 .pdf-cite { font-size: .72em; color: var(--accent); font-weight: 700; vertical-align: super; line-height: 0; }
 .pdf-cites-live .pdf-cite {
-  cursor: pointer; border-radius: 3px; padding: 1px 2px;
+  /* No vertical padding, as in the app: it does not change the line box, but
+     it does make the chip taller than the text and draws the eye to a
+     difference in height that is not there. */
+  cursor: pointer; border-radius: 3px; padding: 0 2px;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
