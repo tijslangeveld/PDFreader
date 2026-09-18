@@ -1087,6 +1087,7 @@ function wireWidthSettings(prefs, root) {
   const reset = $('cfg-reset');
   if (!btn || !panel || !readIn || !tableIn) return;
 
+  let saveTimer = 0;
   let readW = clampW(prefs.readW || DEFAULT_READ_W, READ_W_MIN, READ_W_MAX);
   // A table follows the text until it is set apart: an unset table width is not
   // "as wide as possible", it is "as wide as the column".
@@ -1102,7 +1103,14 @@ function wireWidthSettings(prefs, root) {
     if (readVal) readVal.textContent = readW + ' px';
     if (tableVal) tableVal.textContent = Math.max(tableW, readW) + ' px' +
       (Math.max(tableW, readW) === readW ? ' (als tekst)' : '');
-    if (persist) { prefs.readW = readW; prefs.tableW = tableW; savePrefs(prefs); }
+    // Dragging fires input for every pixel; saving on each one is a localStorage
+    // write per frame. The look updates immediately, the record catches up.
+    if (persist) {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        prefs.readW = readW; prefs.tableW = tableW; savePrefs(prefs);
+      }, 200);
+    }
   }
 
   readIn.min = String(READ_W_MIN); readIn.max = String(READ_W_MAX);
@@ -1114,12 +1122,23 @@ function wireWidthSettings(prefs, root) {
   });
 
   const close = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  // Placed against the window where the button stands at the moment of opening,
+  // and left there: the bar moves as the column widens, the panel must not.
+  const place = () => {
+    const r = btn.getBoundingClientRect();
+    panel.style.top = Math.round(r.bottom + 8) + 'px';
+    panel.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + 'px';
+  };
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     const open = panel.hidden;
+    if (open) place();
     panel.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
   });
+  // A window resize is the one thing that should move it — the point it was
+  // pinned to no longer exists.
+  window.addEventListener('resize', () => { if (!panel.hidden) place(); });
   // Anywhere outside it, and Escape: a settings panel should never be something
   // you have to aim at to get rid of.
   panel.addEventListener('click', (e) => e.stopPropagation());

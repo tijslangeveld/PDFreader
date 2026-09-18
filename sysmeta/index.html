@@ -429,7 +429,10 @@ body {
 /* ── width settings ─────────────────────────────────────── */
 .tb-cfg-wrap { position: relative; display: inline-flex; }
 .cfg-panel {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  /* Fixed, and placed once when it opens. Anchored to the button it would move
+     with the bar — and the bar's width follows the very slider you are dragging,
+     so the track slid out from under the pointer and the value stuttered. */
+  position: fixed; z-index: 60;
   width: 264px; padding: 12px 13px 13px;
   border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
   box-shadow: 0 6px 24px rgba(0,0,0,.12);
@@ -1029,7 +1032,7 @@ sup { vertical-align: super; line-height: 0; font-size: .72em; }
   <div class="doc-sign" id="doc-sign" hidden></div>
 </div>
 
-<script type="module" src="./js/viewer.js?v=15a9fbc5c510"></script>
+<script type="module" src="./js/viewer.js?v=38555274cbbc"></script>
 <script>
 // A module script that fails to load (opening this file over file://, where the
 // browser blocks module imports as cross-origin) leaves the form inert with no
