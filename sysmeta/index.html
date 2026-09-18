@@ -620,14 +620,14 @@ h3.pdf-section-plain {
 .pdf-section-body { padding: 0 0 14px; color: var(--body-text); }
 /* ── Nested sections ──────────────────────────────────────────────────────
    h4/h5/h6 fold inside their h3, so each level reads a step smaller than the
-   one holding it. Indented against a hairline instead of carrying the
-   full-width rule that separates the top-level sections — otherwise every
-   level draws its own and the page becomes a stack of boxes. */
-.pdf-section .pdf-section {
-  border-bottom: none;
-  border-left: 2px solid color-mix(in srgb, var(--border) 55%, transparent);
-  padding-left: 11px;
-}
+   one holding it, and none of them carries the full-width rule that separates
+   the top-level sections — otherwise every level draws its own and the page
+   becomes a stack of boxes. */
+/* No rule down the left: it marked the depth, but a table that is wider than the
+   column crosses it, which reads as broken — and the indent it went with pushed
+   the nested body off-centre, so a full-bleed table hung to the left of the
+   window. The heading's own indent carries the depth instead. */
+.pdf-section .pdf-section { border-bottom: none; }
 .pdf-section-h4 > .pdf-section-summary { font-size: 1.16rem; }
 .pdf-section-h5 > .pdf-section-summary { font-size: 1.06rem; }
 .pdf-section-h6 > .pdf-section-summary { font-size: 1rem; }
@@ -1032,7 +1032,7 @@ sup { vertical-align: super; line-height: 0; font-size: .72em; }
   <div class="doc-sign" id="doc-sign" hidden></div>
 </div>
 
-<script type="module" src="./js/viewer.js?v=38555274cbbc"></script>
+<script type="module" src="./js/viewer.js?v=4c69bf18d53f"></script>
 <script>
 // A module script that fails to load (opening this file over file://, where the
 // browser blocks module imports as cross-origin) leaves the form inert with no
