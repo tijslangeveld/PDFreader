@@ -1,0 +1,936 @@
+<!doctype html>
+<!-- data-theme in the markup, not left to the system: an exported analysis is
+     a published document and should look the same to everyone who opens it.
+     The reader can still switch, and that choice is remembered. -->
+<html lang="nl" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<script>
+  /* Before first paint. Light is the default and is already on <html>, so this
+     only matters for a reader who chose dark: without it they would see the
+     page flash light while viewer.js loads. The key must stay in step with
+     PREFS_KEY in viewer.js — t372 checks that it does. */
+  try {
+    var p = JSON.parse(localStorage.getItem('pdfviewer.prefs.v2') || '{}');
+    if (p && (p.theme === 'dark' || p.theme === 'light'))
+      document.documentElement.setAttribute('data-theme', p.theme);
+  } catch (e) { /* private mode, blocked storage: light it is */ }
+</script>
+<!-- Inline, so the page never fires a 404 for /favicon.ico. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232B6CA3'/%3E%3Cpath d='M4.5 4h5l2.5 2.5V12a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5V4.5a.5.5 0 0 1 .5-.5z' fill='%23fff'/%3E%3C/svg%3E">
+<!-- Deliberately generic: this file is public, so it must not leak the title of
+     the document it unlocks. The real title is set after the payload is
+     decrypted. Generic, though — not wrong: "PDF summary" told every reader of
+     a parliamentary meta-analysis that they were opening something else. -->
+<title>Beveiligd document</title>
+<style>
+/* Self-hosted so the bundle stays fully offline and same-origin. */
+@font-face { font-family: 'Inter'; src: url('./fonts/inter-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Inter'; src: url('./fonts/inter-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Roboto'; src: url('./fonts/roboto-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Roboto'; src: url('./fonts/roboto-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Open Sans'; src: url('./fonts/open-sans-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Open Sans'; src: url('./fonts/open-sans-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Lato'; src: url('./fonts/lato-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Lato'; src: url('./fonts/lato-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+
+/* Palettes lifted verbatim from the newsreader (css/base.css) so a shared
+   analysis looks like the app it came from: warm charcoal greys in dark, warm
+   off-white in light, terracotta accent in both. */
+:root {
+  --bg:        #F5F3EF;
+  --surface:   #FFFFFF;
+  --raised:    #EDEBE7;
+  --border:    #D8D5CF;
+  --text:      #1A1918;
+  --muted:     #6B6862;
+  --subtle:    #B0ADA6;
+  --accent:    #2B6CA3;
+  --body-text: #2E2D2A;
+  --body-em:   #3A3836;
+  --on-accent: #FFFFFF;
+  --mark:      #F6D98A;
+  --fs: 12px;   /* the starting step; the size control moves it — see DEFAULT_FS */
+  /* The starting typeface; the font picker moves it — see DEFAULT_FONT. Set
+     here as well so the first paint is already Roboto rather than a system
+     font that the picker then swaps out under the reader. */
+  --font-stack: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  /* ── Grafieken ───────────────────────────────────────────────────────────
+     A chart in an analysis is drawn once, server-side, against these tokens, so
+     the same SVG reads correctly in both themes. The categorical slots are
+     assigned in fixed order and never cycled. Light steps, validated against
+     this surface: worst adjacent CVD ΔE 9.1, normal-vision ΔE 19.6. */
+  --viz-surface: #F5F3EF;
+  --viz-ink:     #1A1918;
+  --viz-muted:   #6B6862;
+  --viz-grid:    #DDD8CF;
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #e87ba4;
+  --viz-6: #008300;
+  /* The bar under a min–max whisker: a paler step of slot 1's ramp, so the
+     spread drawn across it in ink stays readable. */
+  --viz-bar-soft: #6da7ec;
+  /* Text set INSIDE a bar: white or near-black per slot, whichever clears that
+     fill (4.4–8.6:1 measured). The one place a label may leave the text tokens. */
+  --viz-on-1: #FFFFFF;
+  --viz-on-2: #14130F;
+  --viz-on-3: #14130F;
+  --viz-on-4: #14130F;
+  --viz-on-5: #14130F;
+  --viz-on-6: #FFFFFF;
+  /* ── Verwijzingskleuren per brondocument ─────────────────────────────────
+     In a comparison every citation names its document — [A p.30] — and carries
+     that document's colour as well. TEXT steps, not the chart's mark steps: a
+     superscript is small text and needs the contrast (5.3–6.8:1 here), where a
+     mark only needs 3:1. Colour is a supplement and never the identity itself —
+     the letter is printed in the citation, which is what a reader who cannot
+     tell the hues apart reads. Six, then they repeat; the letter still doesn't. */
+  --cite-1: #1c5cab;
+  --cite-2: #a8431c;
+  --cite-3: #067a54;
+  --cite-4: #8a5a00;
+  --cite-5: #a8336b;
+  --cite-6: #006300;
+  --cite-on: #FFFFFF;   /* text on a chip filled with one of those */
+  /* So the gate's input, the scrollbars and the browser's own furniture match
+     the palette instead of following the system on their own. */
+  color-scheme: light;
+}
+/* The system preference still decides IF the data-theme attribute is removed —
+   nothing does that now, but the rule is what makes an "auto" mode possible at
+   all, and removing it would quietly make that impossible. An explicit
+   data-theme always wins over it. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg:        #262624;
+    --surface:   #2F2E2C;
+    --raised:    #3A3935;
+    --border:    #413F3B;
+    --text:      #F2F0EA;
+    --muted:     #8E8B82;
+    --subtle:    #54524E;
+    --accent:    #7BB2DC;
+    --body-text: #D8D5CC;
+    --body-em:   #E6E3DB;
+    --on-accent: #262624;
+    --mark:      #6B5A2A;
+    /* The dark steps of the same hues — chosen for this surface, not flipped:
+       worst adjacent CVD ΔE 8.4, normal-vision ΔE 19.3 on the page's own
+       --bg (#262624), where all six also clear 3:1. */
+    --viz-surface: #262624;
+    --viz-ink:     #EDEAE4;
+    --viz-muted:   #A39D93;
+    --viz-grid:    #454340;
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-3: #199e70;
+    --viz-4: #c98500;
+    --viz-5: #d55181;
+    --viz-6: #008300;
+    --viz-bar-soft: #256abf;
+    /* Same idea on the dark steps: ink wins on all but the green (4.7–6.1:1). */
+    --viz-on-1: #14130F;
+    --viz-on-2: #14130F;
+    --viz-on-3: #14130F;
+    --viz-on-4: #14130F;
+    --viz-on-5: #14130F;
+    --viz-on-6: #FFFFFF;
+    /* The same six hues, stepped for the dark surface (6.4–8.2:1 on #262624). */
+    --cite-1: #74affa;
+    --cite-2: #f0906a;
+    --cite-3: #5fd1a8;
+    --cite-4: #e8b84b;
+    --cite-5: #f0a0bf;
+    --cite-6: #6fc06f;
+    --cite-on: #262624;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:        #262624;
+  --surface:   #2F2E2C;
+  --raised:    #3A3935;
+  --border:    #413F3B;
+  --text:      #F2F0EA;
+  --muted:     #8E8B82;
+  --subtle:    #54524E;
+  --accent:    #7BB2DC;
+  --body-text: #D8D5CC;
+  --body-em:   #E6E3DB;
+  --on-accent: #262624;
+  --mark:      #6B5A2A;
+  /* The dark steps of the same hues — chosen for this surface, not flipped:
+     worst adjacent CVD ΔE 8.4, normal-vision ΔE 19.3 on the page's own
+     --bg (#262624), where all six also clear 3:1. */
+  --viz-surface: #262624;
+  --viz-ink:     #EDEAE4;
+  --viz-muted:   #A39D93;
+  --viz-grid:    #454340;
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-6: #008300;
+    --viz-bar-soft: #256abf;
+    /* Same idea on the dark steps: ink wins on all but the green (4.7–6.1:1). */
+    --viz-on-1: #14130F;
+    --viz-on-2: #14130F;
+    --viz-on-3: #14130F;
+    --viz-on-4: #14130F;
+    --viz-on-5: #14130F;
+    --viz-on-6: #FFFFFF;
+    /* The same six hues, stepped for the dark surface (6.4–8.2:1 on #262624). */
+    --cite-1: #74affa;
+    --cite-2: #f0906a;
+    --cite-3: #5fd1a8;
+    --cite-4: #e8b84b;
+    --cite-5: #f0a0bf;
+    --cite-6: #6fc06f;
+    --cite-on: #262624;
+}
+* { box-sizing: border-box; }
+/* --fs lives on <html> so every rem in this sheet follows the size control. */
+html { font-size: var(--fs); -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--font-stack);
+  /* The app's reading measure, copied over so a shared analysis reads the way
+     it does in the newsreader: .article-body there is 0.9375rem at 1.8, i.e.
+     text a little smaller than --fs with noticeably looser leading. Both are
+     relative, so the size control still moves the whole thing. */
+  font-size: 0.9375rem; line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+}
+/* 660px of text — the app's --read — plus the same 20px gutter it sets on
+   #page, narrowing to 14px on a phone exactly as the app does. */
+.wrap { max-width: 700px; margin: 0 auto; padding: 20px 20px 96px; }
+@media (max-width: 560px) { .wrap { padding: 20px 14px 96px; } }
+
+/* ── settings bar ────────────────────────────────────────── */
+#topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(10px); backdrop-filter: saturate(180%) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+#topbar[hidden] { display: none; }
+/* Borderless, unfilled controls in muted ink — the newsreader's header idiom.
+   All of them sit at the right edge. */
+.topbar-inner {
+  max-width: 760px; margin: 0 auto; padding: 6px 20px;
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+}
+.tb-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 28px; padding: 0 5px;
+  border: none; background: none; color: var(--muted);
+  font: inherit; font-size: .85rem; font-weight: 600; line-height: 1;
+  border-radius: 6px; cursor: pointer;
+  transition: color .12s ease, background .12s ease;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.tb-btn[disabled] { opacity: .35; cursor: default; }
+.tb-btn:not([disabled]):active { background: color-mix(in srgb, var(--text) 10%, transparent); }
+@media (hover: hover) { .tb-btn:not([disabled]):hover { color: var(--accent); } }
+/* The two A's differ in size so the pair reads as a size control at a glance. */
+.tb-size { display: flex; align-items: center; gap: 2px; }
+.tb-size .tb-btn { font-size: 1rem; min-width: 22px; }
+/* The word is what is seen; the <select> is a transparent hit target laid over
+   it at full size, so the native menu still opens on a tap and the control
+   still focuses and reads as a listbox. The label is fixed — "Lettertype", not
+   the name of the current face, which is what used to fill the bar. */
+.tb-label {
+  font-size: .8rem; font-weight: 600; line-height: 1;
+  white-space: nowrap; letter-spacing: -.01em;
+}
+.tb-size .tb-label { color: var(--muted); margin-right: 2px; }
+.tb-font {
+  position: relative; display: inline-flex; align-items: center; gap: 4px;
+  height: 28px; padding: 0 6px; border-radius: 6px;
+  color: var(--muted); cursor: pointer;
+  transition: color .12s ease, background .12s ease;
+}
+/* A small chevron, so the word reads as something that opens. */
+.tb-font::after {
+  content: ''; width: 5px; height: 5px; flex-shrink: 0; margin-top: -2px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.tb-font:active { background: color-mix(in srgb, var(--text) 10%, transparent); }
+@media (hover: hover) { .tb-font:hover { color: var(--accent); } }
+.tb-font:focus-within { color: var(--accent); }
+#font-pick {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; border: none; background: none; padding: 0;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* Touch browsers zoom the page when a <select> under 16px takes focus, and
+     they do it even when it cannot be seen. */
+  font-size: max(16px, 1rem);
+}
+#font-pick:focus { outline: none; }
+#theme-toggle svg { display: block; }
+
+/* ── unlock gate ─────────────────────────────────────────── */
+#gate {
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+/* An author `display` beats the UA sheet's [hidden] rule, so without this the
+   unlocked document renders below a full viewport of empty gate. */
+#gate[hidden] { display: none; }
+.gate-card {
+  width: 100%; max-width: 380px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 14px; padding: 26px 24px;
+}
+.gate-card h1 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
+.gate-card p { margin: 0 0 18px; font-size: .875rem; color: var(--muted); line-height: 1.55; }
+.gate-card label { display: block; font-size: .75rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+.gate-card input {
+  width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--bg); color: var(--text);
+  /* 16px minimum, or iOS Safari zooms the page on focus. */
+  font: inherit; font-size: max(16px, 1rem); letter-spacing: .06em;
+}
+.gate-card input:focus { outline: none; border-color: var(--accent); }
+/* The document id. Shown rather than hidden: a hidden username field is
+   unreliable — some managers skip it — and it tells a reader holding several
+   links which document this key belongs to. Muted and not focusable, because
+   it is a label, not a question. */
+#gate-user {
+  color: var(--muted); font-size: .8rem; letter-spacing: .04em;
+  margin-bottom: 14px; cursor: default;
+}
+#gate-user:focus { border-color: var(--border); }
+.gate-card button {
+  width: 100%; margin-top: 12px; padding: 11px; border: 1px solid var(--accent);
+  border-radius: 9px; background: var(--accent); color: var(--on-accent);
+  font: inherit; font-size: .9rem; font-weight: 700; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.gate-card button[disabled] { opacity: .55; cursor: default; }
+.gate-msg { margin-top: 12px; font-size: .82rem; min-height: 1.2em; }
+.gate-msg.err { color: #C4563B; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .gate-msg.err { color: #E07A5F; } }
+:root[data-theme="dark"] .gate-msg.err { color: #E07A5F; }
+
+/* ── document header ─────────────────────────────────────── */
+.doc-head { border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 18px; }
+.doc-kicker { font-size: .72rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); }
+.doc-title { margin: 8px 0 6px; font-size: 1.55rem; line-height: 1.2;
+  font-weight: 700; letter-spacing: -.02em; }
+.doc-meta { font-size: .8rem; color: var(--muted); }
+/* The caveat box, above the article. Marked out with the accent rule rather
+   than a warning colour: it is a condition for reading the piece, not an error
+   in it, and something a reader dismisses as an alert defeats the purpose. */
+.doc-notice {
+  margin: 14px 0 4px; padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  font-size: .82rem; line-height: 1.6; color: var(--body-text);
+}
+.doc-notice-title {
+  font-size: .7rem; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 5px;
+}
+.doc-notice p { margin: 0 0 .6rem; }
+.doc-notice p:last-child { margin-bottom: 0; }
+
+/* ── Kampendiagram ────────────────────────────────────────────────────────
+   The camps figure is built on the server with every size baked into an inline
+   style, so it sat at a fixed size while the rest of the page followed the text
+   control. An inline style can only be beaten by !important, and the generated
+   elements carry no classes of their own — so each size is matched on the
+   inline style that sets it.
+
+   1rem is --fs here (html { font-size: var(--fs) }), and --fs starts at 12px,
+   which is the size the figure was drawn against. So each rule is the same
+   fraction of --fs that the px value was of 12 — the figure keeps its own
+   hierarchy and moves with the control.
+
+   t365 checks this list still covers every size the generator emits: if a size
+   is added there and not here, that part of the figure silently stops scaling. */
+/* Its own spacing is inline px too: 20px above, 24px below, and 12px of padding
+   between the rule and the label. Against the introduction that read as a hole
+   rather than a break. Pulled in, and put in rem so it moves with the text
+   instead of staying put while the prose around it grows. */
+.tkl-camps { margin: 0.5rem 0 1.25rem !important; }
+.tkl-camps > [style*="padding:12px 0 10px"] { padding: 0.5rem 0 0.66rem !important; }
+
+.tkl-camps [style*="font-size:9.5px"]  { font-size: 0.79rem !important; }
+.tkl-camps [style*="font-size:10px"]   { font-size: 0.83rem !important; }
+.tkl-camps [style*="font-size:10.5px"] { font-size: 0.88rem !important; }
+.tkl-camps [style*="font-size:11px"]   { font-size: 0.92rem !important; }
+.tkl-camps [style*="font-size:11.5px"] { font-size: 0.96rem !important; }
+/* The party-name column, the total column and the member-list indent are fixed
+   px as well. Left alone they clip the names the moment the text grows, which
+   would make scaling the text look broken. These are em, not rem: a flex-basis
+   and a margin resolve against the element's OWN font-size, which the rules
+   above have just scaled. */
+.tkl-camps [style*="flex:0 0 86px"] { flex-basis: 8.6em !important; }
+.tkl-camps [style*="flex:0 0 44px"] { flex-basis: 4.4em !important; }
+.tkl-camps [style*="margin:0 0 7px 96px"] { margin-left: 10.1em !important; }
+/* The bar itself, so it stays in proportion to the names beside it. */
+.tkl-camps [style*="height:9px"] { height: 0.75rem !important; }
+/* Kicker left, button right, on the same line above the title. Both are short
+   single-line items, so centring them on that line is what reads as level. */
+.doc-head-row {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  min-height: 1.9rem;
+}
+.doc-head-row .doc-kicker { flex: 0 1 auto; min-width: 0; }
+.made-btn {
+  flex-shrink: 0; margin-left: auto;
+  padding: 5px 11px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface, transparent);
+  color: var(--muted); font: inherit; font-size: .72rem; font-weight: 600;
+}
+.made-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* The unit switch, hard right on the same line as the kicker. Only in a bundle
+   exported with --pj-twh; without it the button is not in the page at all. */
+.unit-btn {
+  flex-shrink: 0; margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface, transparent);
+  color: var(--muted); font: inherit; font-size: .72rem; font-weight: 600;
+}
+.unit-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* display:inline-flex above would otherwise beat the browser's own
+   [hidden]{display:none}, and a bundle exported WITHOUT --pj-twh would show an
+   empty button that does nothing. */
+.unit-btn[hidden] { display: none; }
+/* The made-btn keeps the right edge when both are there; the unit switch then
+   sits to its left rather than both fighting for the same margin. */
+.unit-btn + .made-btn { margin-left: 8px; }
+.unit-btn .unit-btn-on { color: var(--text); }
+/* One chart, two renderings — the viewer shows whichever unit is selected. */
+.unit-view[hidden] { display: none; }
+#made-overlay {
+  position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.5);
+  display: none; align-items: center; justify-content: center; padding: 24px 16px;
+}
+#made-overlay.open { display: flex; }
+/* Centred, not shoved up from the bottom: this is a reference panel you read
+   next to the article, not a sheet you dismiss with a thumb. */
+#made-panel {
+  width: 100%; max-width: 720px; max-height: min(88vh, 900px); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .28);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+@media (max-width: 560px) {
+  #made-overlay { padding: 12px 10px; }
+  #made-panel { max-height: 92vh; }
+}
+.made-head {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding: 13px 16px 10px; border-bottom: 1px solid var(--border);
+}
+.made-head strong { flex: 1; font-size: .88rem; }
+.made-x { background: none; border: none; font-size: 22px; color: var(--muted); cursor: pointer; }
+.made-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px 26px; }
+.made-sec {
+  font-size: .62rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--accent); margin: 16px 0 4px;
+}
+.made-row {
+  display: flex; gap: 10px; padding: 5px 0;
+  border-bottom: 1px solid var(--border); font-size: .75rem;
+}
+.made-row span:first-child { color: var(--muted); flex: 0 0 44%; }
+.made-row span:last-child { flex: 1; word-break: break-word; }
+.made-pre {
+  white-space: pre-wrap; word-break: break-word; font-size: .66rem; line-height: 1.5;
+  background: var(--surface, rgba(127,127,127,.08)); border: 1px solid var(--border);
+  border-radius: 7px; padding: 8px 10px; margin: 4px 0 0; max-height: 320px; overflow: auto;
+}
+.made-log { max-height: 60vh; }
+.made-note { font-size: .68rem; color: var(--muted); line-height: 1.5; margin: 4px 0 6px; }
+/* The documents that fell out, titles and all, read from the source list. */
+.made-sub { font-size: .72rem; font-weight: 600; margin: 10px 0 3px; }
+.made-docs {
+  max-height: 180px; overflow-y: auto; overscroll-behavior: contain;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.made-docs > div {
+  padding: 3px 7px; font-size: .64rem; line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+}
+.made-docs > div:last-child { border-bottom: none; }
+.made-docs a { color: inherit; text-decoration: none; }
+.made-docs a:hover { text-decoration: underline; }
+.made-docnum { color: var(--muted); }
+.made-skip {
+  max-height: 200px; overflow-y: auto; font-size: .66rem; line-height: 1.6; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px;
+}
+.made-figs { margin-top: 4px; }
+.doc-tools { display: flex; gap: 8px; align-items: center; margin: 14px 0 4px; flex-wrap: wrap; }
+/* Once moved into the sections bar it is one row with the collapse button:
+   search takes the space, the button keeps its size at the end. */
+.pdf-sections-bar .doc-tools { flex: 1 1 220px; margin: 0; min-width: 0; }
+.pdf-search-wrap { position: relative; flex: 1 1 220px; min-width: 180px; }
+#pdf-search-input {
+  width: 100%; padding: 8px 30px 8px 11px; border: 1px solid var(--border);
+  border-radius: 9px; background: var(--surface); color: var(--text);
+  font: inherit; font-size: max(16px, .875rem);
+}
+#pdf-search-input:focus { outline: none; border-color: var(--accent); }
+#pdf-search-clear {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  border: none; background: none; color: var(--muted); font-size: 18px;
+  line-height: 1; padding: 4px 7px; cursor: pointer;
+}
+#pdf-search-count { font-size: .75rem; color: var(--muted); flex: 0 0 auto; }
+
+/* ── sections ────────────────────────────────────────────── */
+/* Opening paragraph — sits above the section controls, outside the sections. */
+.doc-lead { margin: 0 0 18px; color: var(--body-text); }
+.doc-lead p { margin: 0 0 1.125rem; }
+.doc-lead p:last-child { margin-bottom: 0; }
+.doc-lead ul { margin: .6rem 0 .95rem 1.3rem; padding: 0; }
+
+/* Controls directly above the collapsible sections, right-aligned. */
+/* Search and the fold control follow you down the page.
+   It sticks BELOW the settings bar, which is itself sticky at top:0 — hence the
+   measured offset rather than a guessed one (see --topbar-h). Its own z-index
+   sits under the settings bar and well under the panel overlay. */
+.pdf-sections-bar {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 8px; flex-wrap: wrap; margin: 18px 0 6px;
+  /* One pixel of overlap, because the two offsets are rounded independently and
+     a fractional topbar height leaves a hairline the article scrolls through. */
+  position: sticky; top: calc(var(--topbar-h, 46px) - 1px); z-index: 40;
+  padding: 9px 0 8px;
+  /* Opaque, not translucent. A blurred 92% band still lets a line of article
+     read through it, which is exactly what it is there to prevent — and the
+     strip above it is the one place two sticky bars can leave a gap. */
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+/* The blurred band should reach the edges of the reading column, not stop at
+   the text. .wrap pads by 20px at every width, so this mirrors exactly that —
+   a different number here would leave a strip of article showing through. */
+.pdf-sections-bar {
+  margin-left: -20px; margin-right: -20px; padding-left: 20px; padding-right: 20px;
+}
+.pdf-collapse-all, .pdf-dl-src {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
+  color: var(--muted); font: inherit; font-size: .75rem; font-weight: 600;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.pdf-collapse-all svg, .pdf-dl-src svg { flex-shrink: 0; }
+.pdf-dl-src[disabled] { opacity: .6; cursor: default; }
+@media (hover: hover) {
+  .pdf-collapse-all:hover, .pdf-dl-src:not([disabled]):hover { color: var(--accent); border-color: var(--accent); }
+}
+.pdf-section { border-bottom: 1px solid var(--border); }
+.pdf-section:last-of-type { border-bottom: none; }
+/* Body text is 1rem, so a heading at 1rem was a heading only by weight and
+   colour — and the nested levels below it were smaller than the prose they
+   introduced. Every level now sits above the body, stepping down from the
+   1.55rem title: 1.35 / 1.16 / 1.06 / 1.0. */
+.pdf-section-summary {
+  cursor: pointer; list-style: none; padding: 11px 0 11px 22px; position: relative;
+  font-weight: 700; font-size: 1.35rem; color: var(--accent); letter-spacing: -.01em;
+  line-height: 1.3;
+  -webkit-tap-highlight-color: transparent;
+}
+.pdf-section-summary::-webkit-details-marker { display: none; }
+/* A closed section must take no room. Two rules, because browsers hide
+   <details> content two different ways.
+   1. The content element itself, for the implementations that simply stop
+      rendering the children of a closed <details>.
+   2. Chrome routes that content through ::details-content, which is skipped
+      with content-visibility but sized by contain-intrinsic-size — and the UA
+      sets that to `auto`, meaning "reserve the size you had last time". So a
+      section that has been opened once keeps its full height after it is
+      closed again: a heading, then a screen of nothing, then the next heading.
+      Pinning the intrinsic size to zero takes that reservation away.
+   The ::details-content rule is dropped whole by browsers that do not know the
+   pseudo-element, which is why it is written on its own and not grouped. */
+.pdf-section:not([open]) > .pdf-section-body { display: none; }
+.pdf-section::details-content { contain-intrinsic-size: 0 0; }
+.pdf-section-summary::before {
+  content: '›'; position: absolute; left: 4px; top: 50%;
+  transform: translateY(-50%); transition: transform .16s ease;
+  color: var(--muted); font-size: 1.1em; line-height: 1;
+  transform-origin: 50% 45%;
+}
+.pdf-section[open] > .pdf-section-summary::before { transform: translateY(-50%) rotate(90deg); }
+/* A section deliberately left unfolded — the introduction of a TK
+   meta-analysis. Same heading weight as a folded one, without the chevron. */
+h3.pdf-section-plain {
+  font-weight: 700; font-size: 1.35rem; color: var(--accent);
+  letter-spacing: -.01em; line-height: 1.3; margin: 11px 0 6px; padding: 0;
+}
+.pdf-section-body { padding: 0 0 14px; color: var(--body-text); }
+/* ── Nested sections ──────────────────────────────────────────────────────
+   h4/h5/h6 fold inside their h3, so each level reads a step smaller than the
+   one holding it. Indented against a hairline instead of carrying the
+   full-width rule that separates the top-level sections — otherwise every
+   level draws its own and the page becomes a stack of boxes. */
+.pdf-section .pdf-section {
+  border-bottom: none;
+  border-left: 2px solid color-mix(in srgb, var(--border) 55%, transparent);
+  padding-left: 11px;
+}
+.pdf-section-h4 > .pdf-section-summary { font-size: 1.16rem; }
+.pdf-section-h5 > .pdf-section-summary { font-size: 1.06rem; }
+.pdf-section-h6 > .pdf-section-summary { font-size: 1rem; }
+.pdf-section .pdf-section > .pdf-section-summary { padding: 8px 0 8px 20px; }
+.pdf-section .pdf-section > .pdf-section-body { padding: 0 0 10px; }
+.pdf-section-body em, .pdf-section-body i, .doc-lead em, .doc-lead i { color: var(--body-em); }
+.pdf-section-body strong, .doc-lead strong { color: var(--text); }
+/* Only the headings that were NOT turned into a fold — a level deeper than h6,
+   or a document that nests past what wrapLevel handles. Not below body size:
+   a heading smaller than the prose under it reads as a caption. */
+.pdf-section-body h4, .pdf-section-body h5 { margin: 16px 0 6px; font-size: 1.06rem; font-weight: 700; }
+.pdf-section-body p { margin: 0 0 1.125rem; }
+.pdf-section-body ul { margin: .6rem 0 .95rem 1.3rem; padding: 0; }
+.pdf-section-body li { margin-bottom: .35rem; }
+.pdf-section-body strong { font-weight: 700; }
+/* ── Comparison tables ─────────────────────────────────────────────────────
+   A comparison across documents is often clearest as a grid: one column per
+   document, one row per characteristic, a paragraph in each cell. On a phone
+   that grid cannot shrink to fit, so it scrolls sideways inside its own box
+   rather than squeezing the prose around it into a column of single words. */
+.pdf-section-body .doc-table-wrap, .doc-lead .doc-table-wrap {
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  margin: 0 0 1.125rem; border: 1px solid var(--border); border-radius: 8px;
+}
+.pdf-section-body table, .doc-lead table {
+  border-collapse: collapse; width: 100%; min-width: 520px;
+  font-size: .94em; line-height: 1.5; background: var(--card, transparent);
+}
+.pdf-section-body th, .pdf-section-body td,
+.doc-lead th, .doc-lead td {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 9px 11px; text-align: left; vertical-align: top;
+}
+.pdf-section-body th, .doc-lead th {
+  font-weight: 700; color: var(--text);
+  background: color-mix(in srgb, var(--border) 28%, transparent);
+  position: sticky; top: 0;
+}
+.pdf-section-body tr:last-child td, .doc-lead tr:last-child td { border-bottom: none; }
+.pdf-section-body th:last-child, .pdf-section-body td:last-child,
+.doc-lead th:last-child, .doc-lead td:last-child { border-right: none; }
+/* The row label column: the characteristic being compared. */
+.pdf-section-body tbody th[scope="row"], .doc-lead tbody th[scope="row"] {
+  position: static; background: color-mix(in srgb, var(--border) 16%, transparent);
+  min-width: 128px;
+}
+.pdf-section-body td p, .doc-lead td p { margin: 0 0 .6rem; }
+.pdf-section-body td p:last-child, .doc-lead td p:last-child { margin-bottom: 0; }
+.pdf-section-body caption, .doc-lead caption {
+  caption-side: top; text-align: left; padding: 8px 11px;
+  font-size: .9em; font-weight: 600; color: var(--muted);
+}
+
+/* ── Grafieken ─────────────────────────────────────────────────────────────
+   Static SVG from the analysis; this is only the furniture around it. Text
+   wears text tokens — the swatch beside a label carries identity, never the
+   text's own colour. */
+.an-chart { margin: 4px 0 1.3rem; padding: 0; }
+.an-chart-title { font-size: .95rem; font-weight: 700; color: var(--text); margin: 0 0 2px; }
+.an-chart-unit { font-weight: 500; color: var(--muted); }
+.an-chart-sub { font-size: .85rem; color: var(--muted); margin: 0 0 6px; line-height: 1.5; }
+.an-chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.an-chart-svg .an-ax { font-size: 10px; fill: var(--viz-muted); }
+.an-chart-svg .an-cat { font-size: 11px; fill: var(--viz-ink); }
+.an-chart-svg .an-val { font-size: 10.5px; fill: var(--viz-ink); }
+.an-chart-svg .an-val-sm { font-size: 9.5px; }
+.an-chart-svg .an-val-range { fill: var(--viz-muted); font-size: 9.5px; }
+.an-chart-svg .an-seg { font-size: 9.5px; font-weight: 600; }
+.an-chart-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 7px; font-size: .82rem; color: var(--muted); }
+.an-chart-key { display: inline-flex; align-items: center; gap: 5px; }
+.an-chart-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.an-chart-note { font-size: .82rem; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+
+/* ── Which document a letter stands for ───────────────────────────────────── */
+.doc-key-block { margin: 0 0 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.doc-key-head {
+  font-size: .72rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+}
+.doc-key-sub { font-size: .85rem; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
+.doc-roster { display: flex; flex-wrap: wrap; gap: 7px; }
+.doc-roster-item {
+  display: flex; align-items: center; gap: 7px; max-width: 100%;
+  padding: 5px 11px 5px 5px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text); font: inherit; font-size: .86rem;
+  cursor: pointer; text-align: left;
+}
+.doc-roster-item.is-inert { cursor: default; opacity: .6; }
+.doc-roster-key {
+  flex-shrink: 0; min-width: 20px; height: 20px; border-radius: 5px;
+  /* Filled with the document's citation colour (set inline per letter); that
+     colour is dark on paper and light on charcoal, so its text flips too. */
+  background: var(--accent); color: var(--cite-on, #fff); font-size: .78rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.doc-roster-pages { color: var(--muted); }
+.pdfpage-doc { display: block; font-size: .72rem; font-weight: 500; color: var(--muted); margin-top: 2px; }
+
+.pdf-search-hidden { display: none !important; }
+.pdf-searching .pdf-sec-nomatch > .pdf-section-summary { opacity: .45; }
+mark.pdf-hit { background: var(--mark); color: inherit; border-radius: 2px; padding: 0 1px; }
+
+/* ── citations ───────────────────────────────────────────── */
+/* EVERY superscript, not only the ones the citation pass recognised.
+   `line-height: 0` is what stops a raised inline box from making its line
+   taller than the lines around it — without it a <sup> inherits the body's
+   1.8 and the row it sits on grows. The app does exactly this on
+   `.article-body sup`, and the rule has to be as broad here: a TK reference,
+   a page range the regex did not match, a footnote the model wrote — none of
+   them carry .pdf-cite, and each would stretch its own line. */
+sup { vertical-align: super; line-height: 0; font-size: .72em; }
+.pdf-cite { font-size: .72em; color: var(--accent); font-weight: 700; vertical-align: super; line-height: 0; }
+.pdf-cites-live .pdf-cite {
+  /* No vertical padding, as in the app: it does not change the line box, but
+     it does make the chip taller than the text and draws the eye to a
+     difference in height that is not there. */
+  cursor: pointer; border-radius: 3px; padding: 0 2px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+@media (hover: hover) {
+  .pdf-cites-live .pdf-cite:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+}
+.pdf-cites-live .pdf-cite:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ── page popup ──────────────────────────────────────────── */
+.pdfpage-overlay {
+  position: fixed; inset: 0; z-index: 200; display: flex; align-items: center;
+  justify-content: center; padding: 16px; background: rgba(0,0,0,.55);
+  opacity: 0; transition: opacity .18s ease; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+.pdfpage-overlay.open { opacity: 1; }
+.pdfpage-popup {
+  width: 100%; max-width: 760px; max-height: 92dvh; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
+  overflow: hidden; transform: translateY(8px); transition: transform .18s ease;
+}
+.pdfpage-overlay.open .pdfpage-popup { transform: none; }
+.pdfpage-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 14px; border-bottom: 1px solid var(--border);
+}
+.pdfpage-title { font-size: .85rem; font-weight: 700; }
+.pdfpage-num { font-weight: 400; color: var(--muted); }
+.pdfpage-close {
+  border: none; background: none; color: var(--muted); font-size: 24px;
+  line-height: 1; padding: 0 4px; cursor: pointer;
+}
+.pdfpage-refs {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 9px 14px; border-bottom: 1px solid var(--border);
+}
+.pdfpage-refs-label { font-size: .7rem; color: var(--muted); margin-right: 2px; }
+.pdfpage-ref {
+  min-width: 26px; padding: 3px 7px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text); font: inherit; font-size: .75rem;
+  font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.pdfpage-ref.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+@media (hover: hover) { .pdfpage-ref:not(.active):hover { border-color: var(--accent); color: var(--accent); } }
+.pdfpage-body {
+  flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 14px; background: var(--raised);
+}
+.pdfpage-canvas {
+  max-width: 100%; height: auto; display: block; border-radius: 5px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.28); background: #fff;
+}
+.pdfpage-loading, .pdfpage-empty { padding: 34px 10px; font-size: .82rem; color: var(--muted); text-align: center; }
+.pdfpage-notice {
+  width: 100%; margin-bottom: 10px; padding: 8px 10px; border-radius: 7px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: .75rem; color: var(--muted); line-height: 1.45;
+}
+.pdfpage-text {
+  width: 100%; margin: 0; white-space: pre-wrap; font-size: .8rem; line-height: 1.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text);
+}
+.pdfpage-foot {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+.pdfpage-nav, .pdfpage-toggle, .pdfpage-open, .pdfpage-close-foot {
+  border: 1px solid var(--border); border-radius: 7px; background: var(--bg);
+  color: var(--text); font: inherit; font-size: .78rem; font-weight: 600;
+  padding: 6px 11px; cursor: pointer; text-decoration: none; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.pdfpage-toggle { margin-left: auto; }
+.pdfpage-nav[disabled] { opacity: .4; cursor: default; }
+/* The primary way out of the popup, so give it the filled treatment. */
+.pdfpage-close-foot { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+@media (hover: hover) {
+  .pdfpage-nav:not([disabled]):hover, .pdfpage-toggle:hover, .pdfpage-open:hover {
+    border-color: var(--accent); color: var(--accent);
+  }
+  .pdfpage-close-foot:hover { filter: brightness(1.08); }
+}
+/* On a phone the four buttons no longer fit one row. */
+@media (max-width: 460px) {
+  .pdfpage-foot { flex-wrap: wrap; gap: 6px; }
+  .pdfpage-toggle { margin-left: auto; }
+  .pdfpage-open { display: none; }
+}
+.foot-note {
+  margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border);
+  font-size: .74rem; color: var(--muted); line-height: 1.5;
+}
+/* The signature, last thing on the page. */
+.doc-sign {
+  margin-top: 18px; padding-bottom: 28px;
+  font-size: .74rem; color: var(--muted); line-height: 1.5;
+}
+.doc-sign[hidden] { display: none; }
+/* A button, not a link: there is no href to follow until it is clicked, which
+   is the point — but it has to look and behave like one, so it keeps a link's
+   appearance and stays reachable from the keyboard. */
+.sign-contact {
+  background: none; border: none; padding: 0; margin: 0;
+  font: inherit; color: var(--accent); text-decoration: underline;
+  text-underline-offset: 2px; cursor: pointer;
+}
+.sign-contact:hover { text-decoration-thickness: 2px; }
+.sign-contact:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-card">
+    <h1>Beveiligd document</h1>
+    <p>Deze pagina is versleuteld. Voer de sleutel in die je bij de link hebt gekregen.</p>
+    <!-- A real form with a username field, so a password manager can file this
+         key under THIS bundle. A lone password field is stored per origin, so
+         every export on the same host would share one entry and each new one
+         would overwrite the last. The id comes from manifest.json and is
+         filled in by the viewer; readonly, because it identifies the document
+         rather than asking anything of the reader. -->
+    <form id="gate-form" action="#" method="post" autocomplete="on">
+      <label for="gate-user">Document</label>
+      <input id="gate-user" name="username" type="text" autocomplete="username"
+             readonly tabindex="-1" value="">
+      <label for="gate-key">Sleutel</label>
+      <input id="gate-key" name="password" type="password" autocomplete="current-password"
+             autocapitalize="characters" autocorrect="off" spellcheck="false" inputmode="text">
+      <button id="gate-go" type="submit">Ontgrendelen</button>
+    </form>
+    <div class="gate-msg" id="gate-msg"></div>
+  </div>
+</div>
+
+<div id="topbar" hidden>
+  <div class="topbar-inner">
+    <!-- Two A's at different sizes read as one control only if you already
+         know what it is; at a glance they were just two letters. A word and a
+         pair of signs say it outright. -->
+    <div class="tb-size">
+      <span class="tb-label" aria-hidden="true">Tekst</span>
+      <button class="tb-btn" id="fs-down" type="button" aria-label="Kleinere tekst">&minus;</button>
+      <button class="tb-btn" id="fs-up" type="button" aria-label="Grotere tekst">+</button>
+    </div>
+    <!-- The face is chosen from a real <select> — native menus behave far
+         better on a phone than anything hand-rolled — but its own text is not
+         shown: the name of the current font took as much room as the rest of
+         the bar. The select lies transparent over the icon and still catches
+         every click, so keyboard and screen-reader behaviour are untouched. -->
+    <span class="tb-font" title="Lettertype">
+      <span class="tb-label" aria-hidden="true">Lettertype</span>
+      <select id="font-pick" aria-label="Lettertype">
+        <option value="lato">Lato</option>
+        <option value="system">Systeem</option>
+        <option value="inter">Inter</option>
+        <option value="roboto">Roboto</option>
+        <option value="open-sans">Open Sans</option>
+        <option value="georgia">Georgia</option>
+        <option value="palatino">Palatino</option>
+        <option value="charter">Charter</option>
+      </select>
+    </span>
+    <button class="tb-btn" id="theme-toggle" type="button" aria-label="Donkere modus"></button>
+  </div>
+</div>
+
+<div class="wrap" id="doc" hidden>
+  <div class="doc-head">
+    <!-- The kicker and, hard right on the same line, the way into how it was
+         made. Hidden unless the bundle actually carries that. -->
+    <div class="doc-head-row">
+      <div class="doc-kicker" id="doc-kicker">PDF summary</div>
+      <!-- Only present when the bundle was exported with --pj-twh. -->
+      <button type="button" class="unit-btn" id="unit-btn" hidden></button>
+      <button type="button" class="made-btn" id="made-btn" hidden>Hoe deze analyse is gemaakt</button>
+    </div>
+    <h1 class="doc-title" id="doc-title"></h1>
+    <div class="doc-meta" id="doc-meta"></div>
+    <!-- Only present when the bundle was exported with --disclaimer. -->
+    <div class="doc-notice" id="doc-notice" hidden></div>
+    <div class="doc-tools">
+      <div class="pdf-search-wrap">
+        <input id="pdf-search-input" type="search" placeholder="Zoek in deze samenvatting…"
+               autocomplete="off" autocorrect="off" spellcheck="false">
+        <button id="pdf-search-clear" type="button" aria-label="Zoekopdracht wissen" style="display:none">&times;</button>
+      </div>
+      <span id="pdf-search-count"></span>
+    </div>
+  </div>
+  <div id="doc-body"></div>
+  <div class="foot-note" id="doc-foot"></div>
+  <!-- Only present when the bundle was exported with --signed. -->
+  <div class="doc-sign" id="doc-sign" hidden></div>
+</div>
+
+<script type="module" src="./js/viewer.js"></script>
+<script>
+// A module script that fails to load (opening this file over file://, where the
+// browser blocks module imports as cross-origin) leaves the form inert with no
+// explanation. Classic script, so it runs even then.
+setTimeout(function () {
+  if (window.__viewerBooted) return;
+  var msg = document.getElementById('gate-msg');
+  var go = document.getElementById('gate-go');
+  if (go) go.disabled = true;
+  if (!msg) return;
+  msg.className = 'gate-msg err';
+  msg.textContent = location.protocol === 'file:'
+    ? 'Open deze map via een webserver (http/https) — rechtstreeks openen van het bestand werkt niet.'
+    : 'De viewer kon niet geladen worden. Controleer of de map js/ volledig is meegekopieerd.';
+}, 4000);
+</script>
+  <div id="made-overlay">
+    <div id="made-panel">
+      <div class="made-head"><strong>Hoe deze analyse is gemaakt</strong>
+        <button class="made-x" id="made-x" aria-label="Sluiten">&times;</button></div>
+      <div class="made-body" id="made-body"></div>
+    </div>
+  </div>
+
+<!-- GoatCounter is NOT loaded here. It is injected by loadCounter() in
+     viewer.js, after the address bar has been cleaned — count.js posts
+     location.search as a field of its own, so a key that arrived as ?TOKEN
+     would go to a third party verbatim if the counter loaded first. -->
+</body>
+</html>
