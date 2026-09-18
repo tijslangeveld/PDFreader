@@ -625,15 +625,22 @@ h3.pdf-section-plain {
 }
 .pdf-section-body th, .doc-lead th {
   font-weight: 700; color: var(--text);
-  background: color-mix(in srgb, var(--border) 28%, transparent);
-  position: sticky; top: 0;
+  /* Mixed with the surface rather than transparency: rows slide under a sticky
+     header, and anything see-through turns to mush. */
+  background: color-mix(in srgb, var(--border) 28%, var(--bg));
 }
+/* A long table gets its own pane so its header can stay put while you read down
+   it. The pane is what makes sticky work: the wrapper already scrolls sideways,
+   so it — not the page — is what a sticky cell sticks to, and a box that grows
+   with its content never scrolls vertically for the header to stick against. */
+.doc-table-wrap.is-long { max-height: 70vh; overscroll-behavior: contain; }
+.doc-table-wrap.is-long thead th { position: sticky; top: 0; z-index: 2; }
 .pdf-section-body tr:last-child td, .doc-lead tr:last-child td { border-bottom: none; }
 .pdf-section-body th:last-child, .pdf-section-body td:last-child,
 .doc-lead th:last-child, .doc-lead td:last-child { border-right: none; }
 /* The row label column: the characteristic being compared. */
 .pdf-section-body tbody th[scope="row"], .doc-lead tbody th[scope="row"] {
-  position: static; background: color-mix(in srgb, var(--border) 16%, transparent);
+  position: static; background: color-mix(in srgb, var(--border) 16%, var(--bg));
   min-width: 128px;
 }
 .pdf-section-body td p, .doc-lead td p { margin: 0 0 .6rem; }
@@ -722,6 +729,7 @@ sup { vertical-align: super; line-height: 0; font-size: .72em; }
   opacity: 0; transition: opacity .18s ease; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
 }
 .pdfpage-overlay.open { opacity: 1; }
+.pdfpage-overlay { overscroll-behavior: contain; }
 .pdfpage-popup {
   width: 100%; max-width: 760px; max-height: 92dvh; display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
@@ -752,6 +760,11 @@ sup { vertical-align: super; line-height: 0; font-size: .72em; }
 @media (hover: hover) { .pdfpage-ref:not(.active):hover { border-color: var(--accent); color: var(--accent); } }
 .pdfpage-body {
   flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
+  /* Where the scroll stops. Without this, the moment the page in the popup
+     reaches its end the wheel carries on into the ARTICLE behind it — and on a
+     tall window, where the page nearly fits, that is almost immediately, so it
+     reads as "the PDF will not scroll, the page behind does". */
+  overscroll-behavior: contain;
   display: flex; flex-direction: column; align-items: center;
   padding: 14px; background: var(--raised);
 }

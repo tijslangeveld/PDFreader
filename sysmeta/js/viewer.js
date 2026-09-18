@@ -277,9 +277,15 @@ function mdToHtml(text) {
 
 // A comparison table cannot shrink to phone width without turning each cell
 // into a column of single words, so it scrolls sideways in its own frame.
+// Past this many rows a table gets its own scroll pane, so its header can stay
+// put while you read down it. Shorter tables are left as they are.
+const DOC_TABLE_LONG_ROWS = 10;
 function wrapTables(html) {
   if (!html || html.indexOf('<table') === -1) return html;
-  return String(html).replace(/<table([\s\S]*?)<\/table>/gi, (m) => '<div class="doc-table-wrap">' + m + '</div>');
+  return String(html).replace(/<table([\s\S]*?)<\/table>/gi, (m) => {
+    const rows = (m.match(/<tr[\s>]/gi) || []).length;
+    return '<div class="doc-table-wrap' + (rows > DOC_TABLE_LONG_ROWS ? ' is-long' : '') + '">' + m + '</div>';
+  });
 }
 
 // "[p.11, 68]" / "[p.20-22]" → a clickable <sup> carrying every cited page.
