@@ -212,7 +212,7 @@ body {
 }
 /* 660px of text — the app's --read — plus the same 20px gutter it sets on
    #page, narrowing to 14px on a phone exactly as the app does. */
-.wrap { max-width: 700px; margin: 0 auto; padding: 20px 20px 96px; }
+.wrap { max-width: var(--read-w, 700px); margin: 0 auto; padding: 20px 20px 96px; }
 @media (max-width: 560px) { .wrap { padding: 20px 14px 96px; } }
 
 /* ── settings bar ────────────────────────────────────────── */
@@ -226,7 +226,9 @@ body {
 /* Borderless, unfilled controls in muted ink — the newsreader's header idiom.
    All of them sit at the right edge. */
 .topbar-inner {
-  max-width: 760px; margin: 0 auto; padding: 6px 20px;
+  /* The bar keeps pace with the column it sits over: 60px is .wrap's padding
+     plus the little the bar needs so its right edge is not flush with the text. */
+  max-width: calc(var(--read-w, 700px) + 60px); margin: 0 auto; padding: 6px 20px;
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
 }
 .tb-btn {
@@ -424,6 +426,32 @@ body {
   .tb-unit-opt[aria-pressed="false"]:hover { color: var(--accent); }
 }
 .tb-unit-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* ── width settings ─────────────────────────────────────── */
+.tb-cfg-wrap { position: relative; display: inline-flex; }
+.cfg-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  width: 264px; padding: 12px 13px 13px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  box-shadow: 0 6px 24px rgba(0,0,0,.12);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.cfg-panel[hidden] { display: none; }
+.cfg-row { display: flex; flex-direction: column; gap: 5px; }
+.cfg-label {
+  font-size: .78rem; font-weight: 600; color: var(--text);
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+}
+.cfg-val { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cfg-hint { font-size: .72rem; line-height: 1.4; color: var(--muted); }
+.cfg-panel input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
+.cfg-reset {
+  align-self: flex-start; padding: 5px 9px; border-radius: 7px;
+  border: 1px solid var(--border); background: none; color: var(--muted);
+  font: inherit; font-size: .74rem; font-weight: 600; cursor: pointer;
+}
+@media (hover: hover) { .cfg-reset:hover { color: var(--accent); border-color: var(--accent); } }
+/* On a phone the column is the window, so the two sliders have nothing to do. */
+@media (max-width: 720px) { .tb-cfg-wrap { display: none; } }
 /* One chart, two renderings — the viewer shows whichever unit is selected. */
 .unit-view[hidden] { display: none; }
 #made-overlay {
@@ -619,6 +647,11 @@ h3.pdf-section-plain {
    rather than squeezing the prose around it into a column of single words. */
 .pdf-section-body .doc-table-wrap, .doc-lead .doc-table-wrap {
   margin: 0 0 1.125rem; border: 1px solid var(--border); border-radius: 8px;
+  /* A table may be wider than the text it sits between — a comparison across
+     four documents wants room the prose does not. It is centred on the column
+     rather than pushed off to one side, and never wider than the window. */
+  width: min(var(--table-w, 100%), calc(100vw - 28px));
+  margin-left: 50%; transform: translateX(-50%);
 }
 /* Only a table too wide for the column gets the scrolling frame, because the
    frame is a scroll container and a sticky header sticks to its nearest
@@ -940,6 +973,32 @@ sup { vertical-align: super; line-height: 0; font-size: .72em; }
       <button class="tb-unit-opt" id="unit-to" type="button" aria-pressed="false"></button>
     </div>
     <button class="tb-btn" id="theme-toggle" type="button" aria-label="Donkere modus"></button>
+    <!-- Width settings. A cogwheel rather than two more sliders in the bar: this
+         is set once and then left alone, unlike the size and the typeface. -->
+    <span class="tb-cfg-wrap">
+      <button class="tb-btn" id="cfg-btn" type="button" aria-label="Breedte-instellingen"
+              aria-expanded="false" aria-controls="cfg-panel">
+        <!-- A real toothed gear: a circle with eight spokes around it read as a
+             sun at 15px, which is the icon next to it. -->
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+             stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <div class="cfg-panel" id="cfg-panel" hidden role="dialog" aria-label="Breedte-instellingen">
+        <div class="cfg-row">
+          <label class="cfg-label" for="cfg-read">Tekstbreedte <span class="cfg-val" id="cfg-read-val"></span></label>
+          <input type="range" id="cfg-read" min="520" max="1100" step="20">
+        </div>
+        <div class="cfg-row">
+          <label class="cfg-label" for="cfg-table">Tabelbreedte <span class="cfg-val" id="cfg-table-val"></span></label>
+          <input type="range" id="cfg-table" min="520" max="1800" step="20">
+          <div class="cfg-hint">Een tabel mag breder zijn dan de tekst; hij blijft gecentreerd en nooit breder dan het venster.</div>
+        </div>
+        <button type="button" class="cfg-reset" id="cfg-reset">Standaardbreedtes herstellen</button>
+      </div>
+    </span>
   </div>
 </div>
 
@@ -970,7 +1029,7 @@ sup { vertical-align: super; line-height: 0; font-size: .72em; }
   <div class="doc-sign" id="doc-sign" hidden></div>
 </div>
 
-<script type="module" src="./js/viewer.js"></script>
+<script type="module" src="./js/viewer.js?v=15a9fbc5c510"></script>
 <script>
 // A module script that fails to load (opening this file over file://, where the
 // browser blocks module imports as cross-origin) leaves the form inert with no

@@ -387,6 +387,12 @@ const SUB_LEVELS = ['h4', 'h5', 'h6'];
 // One heading level inside a section, folded, recursing into the levels below.
 // Anything ahead of the first heading at this level is that section's own lead
 // and stays where it is.
+// Whether the headings INSIDE a section start folded. Off unless the bundle was
+// exported with --fold-subsections: a section you unfold should normally show
+// you its contents, not another list of things to click. It earns its keep when
+// a section holds a dozen sub-headings and the list of them IS the map.
+let FOLD_SUBS = false;
+
 function wrapLevel(html, tag, below) {
   const parts = html.split(new RegExp('(<' + tag + '[^>]*>[\\s\\S]*?<\\/' + tag + '>)', 'i'));
   const secs = [];
@@ -412,8 +418,8 @@ function wrapLevel(html, tag, below) {
     // holding it, and CSS cannot count nesting depth by itself.
     // Open: every level below the top starts unfolded. The fold that earns
     // its keep is the one over a whole DEEL; unfolding each sub-heading in
-    // turn to read a section is work, not navigation.
-    return '<details class="pdf-section pdf-section-' + tag + '" open>' +
+    // turn is work, not navigation — unless the bundle asked for exactly that.
+    return '<details class="pdf-section pdf-section-' + tag + '"' + (FOLD_SUBS ? '' : ' open') + '>' +
       '<summary class="pdf-section-summary">' + sec.heading + '</summary>' +
       '<div class="pdf-section-body">' + inner + '</div></details>';
   }).join('');
@@ -575,6 +581,15 @@ const SUN = '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke=
 const MOON = '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">' +
   '<path d="M16.5 12.4A7 7 0 0 1 7.6 3.5a7 7 0 1 0 8.9 8.9z"/></svg>';
 
+// How wide the column is, and how wide a table in it may be. Two settings rather
+// than one: the prose wants a short line to read comfortably, while a comparison
+// across four documents wants room the prose does not — and tying them together
+// means every table is as narrow as the text, or every line is as long as a table.
+const DEFAULT_READ_W = 700;
+const READ_W_MIN = 520, READ_W_MAX = 1100;
+const TABLE_W_MIN = 520, TABLE_W_MAX = 1800;
+const clampW = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(Number(v) || 0)));
+
 function wireSettings() {
   const prefs = loadPrefs();
   const root = document.documentElement;
@@ -620,6 +635,9 @@ function wireSettings() {
     themeBtn.title = isDark ? 'Lichte modus' : 'Donkere modus';
     if (persist) { prefs.theme = theme; savePrefs(prefs); }
   }
+  // Width ──
+  wireWidthSettings(prefs, root);
+
   themeBtn.addEventListener('click', () => {
     const isDark = root.getAttribute('data-theme') === 'dark' ||
       (!root.hasAttribute('data-theme') && systemDark());
@@ -679,6 +697,8 @@ const IS_INTRO = (h) => /^\s*(?:\d+[.)]\s*)?(?:inleiding|introductie|introductio
 
 function render(data) {
   const isTk = data.kind === 'tk';
+  // Read before the first wrapSections call below, since it decides the markup.
+  FOLD_SUBS = !!data.foldSubsections;
   const isMulti = data.kind === 'multi' && Array.isArray(data.sources);
   SOURCES = isMulti ? data.sources : [];
   DOC_TITLE = data.title || '';
@@ -1058,6 +1078,57 @@ function fitTables(root) {
   if (window.ResizeObserver) new window.ResizeObserver(fit).observe(root);
 }
 
+// The cogwheel: the two widths, set once and then left alone — which is why they
+// live behind a button rather than in the bar beside the size and the typeface.
+function wireWidthSettings(prefs, root) {
+  const btn = $('cfg-btn'), panel = $('cfg-panel');
+  const readIn = $('cfg-read'), tableIn = $('cfg-table');
+  const readVal = $('cfg-read-val'), tableVal = $('cfg-table-val');
+  const reset = $('cfg-reset');
+  if (!btn || !panel || !readIn || !tableIn) return;
+
+  let readW = clampW(prefs.readW || DEFAULT_READ_W, READ_W_MIN, READ_W_MAX);
+  // A table follows the text until it is set apart: an unset table width is not
+  // "as wide as possible", it is "as wide as the column".
+  let tableW = prefs.tableW ? clampW(prefs.tableW, TABLE_W_MIN, TABLE_W_MAX) : readW;
+
+  function apply(persist) {
+    root.style.setProperty('--read-w', readW + 'px');
+    // A table narrower than the column would sit oddly inside it; the column is
+    // the floor, the window (handled in CSS) is the ceiling.
+    root.style.setProperty('--table-w', Math.max(tableW, readW) + 'px');
+    readIn.value = String(readW);
+    tableIn.value = String(Math.max(tableW, readW));
+    if (readVal) readVal.textContent = readW + ' px';
+    if (tableVal) tableVal.textContent = Math.max(tableW, readW) + ' px' +
+      (Math.max(tableW, readW) === readW ? ' (als tekst)' : '');
+    if (persist) { prefs.readW = readW; prefs.tableW = tableW; savePrefs(prefs); }
+  }
+
+  readIn.min = String(READ_W_MIN); readIn.max = String(READ_W_MAX);
+  tableIn.min = String(TABLE_W_MIN); tableIn.max = String(TABLE_W_MAX);
+  readIn.addEventListener('input', () => { readW = clampW(readIn.value, READ_W_MIN, READ_W_MAX); apply(true); });
+  tableIn.addEventListener('input', () => { tableW = clampW(tableIn.value, TABLE_W_MIN, TABLE_W_MAX); apply(true); });
+  if (reset) reset.addEventListener('click', () => {
+    readW = DEFAULT_READ_W; tableW = DEFAULT_READ_W; apply(true);
+  });
+
+  const close = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = panel.hidden;
+    panel.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  // Anywhere outside it, and Escape: a settings panel should never be something
+  // you have to aim at to get rid of.
+  panel.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => { if (!panel.hidden) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) close(); });
+
+  apply(false);
+}
+
 // ── PJ ⇄ TWh ────────────────────────────────────────────────
 // A bundle exported with --pj-twh carries every chart twice, once per unit, and
 // this converts everything else: the running text, the tables, the chart
@@ -1183,8 +1254,26 @@ function applyUnit(unit, toggle) {
 
 function wireUnitToggle(data) {
   const toggle = data && data.unitToggle;
+  if (!toggle) return;
   const group = $('unit-toggle'), fromBtn = $('unit-from'), toBtn = $('unit-to');
-  if (!toggle || !group || !fromBtn || !toBtn) return;
+  // A bundle whose index.html is older than its viewer.js has the previous
+  // single button instead of the pair. That mix used to leave a control that
+  // did nothing at all; here it simply keeps working, as the button it is.
+  if (!group || !fromBtn || !toBtn) {
+    const legacy = $('unit-btn');
+    if (!legacy) return;
+    markUnitValues($('doc-body'));
+    legacy.hidden = false;
+    legacy.style.display = '';
+    const paint = (u) => {
+      applyUnit(u, toggle);
+      legacy.textContent = 'Toon in ' + (u === toggle.from ? toggle.to : toggle.from);
+    };
+    legacy.addEventListener('click', () =>
+      paint(document.documentElement.dataset.unit === toggle.to ? toggle.from : toggle.to));
+    paint(toggle.from);
+    return;
+  }
   markUnitValues($('doc-body'));
   group.hidden = false;
   // The document's own unit is where it starts; a reader who chose otherwise
