@@ -1067,7 +1067,22 @@ function fitTables(root) {
 // the document actually said. Switching then rewrites those spans rather than
 // re-parsing the article, so going back gives the original text exactly — a
 // converted number is never converted again.
-const UNIT_NUM = /(\d[\d.,]*)(\s*)(PJ)\b/g;
+// "662 PJ", but also "32 tot 100 PJ" and "tussen 32 en 100 PJ": only the number
+// touching the unit used to be converted, so a range came out as "32 tot 27,8
+// TWh" — half converted, and wrong in a way that reads as right.
+//
+// The leading number is optional and matched separately from the one that
+// carries the unit, so a match that is NOT a range simply re-emits its prefix as
+// plain text. "en" only joins a range after the word "tussen": without that
+// guard "in 2050 en 100 PJ" would convert the year.
+const UNIT_NUM = /((?:tussen\s+)?)(?:(\d[\d.,]*)(\s*(?:[-\u2013\u2014]|tot en met|tot|t\/m|en|à)\s*))?(\d[\d.,]*)(\s*)(PJ)\b/gi;
+// Does the leading "<number><separator>" belong to the value, or is it just text
+// that happens to sit in front of it?
+function unitIsRange(prefix, sep) {
+  if (!sep) return false;
+  if (/^\s*en\s*$/i.test(sep)) return /tussen/i.test(prefix);
+  return true;
+}
 
 function parseNlNumber(str) {
   // "1.209" is twelve hundred and nine; "24,7" is twenty-four point seven.
@@ -1088,6 +1103,10 @@ function markUnitValues(root) {
       // second, properly drawn chart for that.
       if (node.parentElement && node.parentElement.closest('svg')) return NodeFilter.FILTER_REJECT;
       if (node.parentElement && node.parentElement.classList.contains('u-val')) return NodeFilter.FILTER_REJECT;
+      // lastIndex, not a typo: UNIT_NUM is a /g regex, and .test() advances it.
+      // Left alone, every other text node starts its test half way through the
+      // previous one and a paragraph that does contain a value is skipped.
+      UNIT_NUM.lastIndex = 0;
       return UNIT_NUM.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
   });
@@ -1097,14 +1116,19 @@ function markUnitValues(root) {
   for (const node of targets) {
     const frag = document.createDocumentFragment();
     let last = 0;
-    String(node.nodeValue).replace(UNIT_NUM, (m, num, gap, unit, at) => {
-      frag.appendChild(document.createTextNode(node.nodeValue.slice(last, at)));
+    String(node.nodeValue).replace(UNIT_NUM, (m, prefix, first, sep, num, gap, unit, at) => {
+      const range = unitIsRange(prefix, sep);
+      // Everything before the value stays as it was written — the word "tussen",
+      // and a leading number that turned out not to be part of a range.
+      const head = range ? prefix : m.slice(0, m.length - (num + gap + unit).length);
+      frag.appendChild(document.createTextNode(node.nodeValue.slice(last, at) + head));
       const span = document.createElement('span');
       span.className = 'u-val';
-      span.dataset.num = num;
+      if (range) { span.dataset.num = first; span.dataset.sep = sep; span.dataset.num2 = num; }
+      else { span.dataset.num = num; }
       span.dataset.gap = gap;
       span.dataset.unit = unit;
-      span.textContent = m;
+      span.textContent = m.slice(head.length);
       frag.appendChild(span);
       last = at + m.length;
       return m;
@@ -1123,11 +1147,21 @@ function applyUnit(unit, toggle) {
   });
   document.querySelectorAll('.u-val').forEach((span) => {
     const raw = span.dataset.num, gap = span.dataset.gap || ' ';
-    if (unit === from) { span.textContent = raw + gap + from; return; }
-    const n = parseNlNumber(raw);
+    const sep = span.dataset.sep, raw2 = span.dataset.num2;
+    // Both ends of a range move together, or the reader is left with one number
+    // in each unit and no way to tell.
+    const head = sep ? raw + sep : '';
+    if (unit === from) { span.textContent = head + (sep ? raw2 : raw) + gap + from; return; }
+    const n = parseNlNumber(sep ? raw2 : raw);
+    const n1 = sep ? parseNlNumber(raw) : null;
     // A number this cannot read stays exactly as it was written, in its own unit,
-    // rather than being replaced by something wrong.
-    span.textContent = n === null ? raw + gap + from : fmtNlNumber(n * factor) + gap + to;
+    // rather than being replaced by something wrong — and if either end of a
+    // range is unreadable, neither end moves.
+    if (n === null || (sep && n1 === null)) {
+      span.textContent = head + (sep ? raw2 : raw) + gap + from;
+      return;
+    }
+    span.textContent = (sep ? fmtNlNumber(n1 * factor) + sep : '') + fmtNlNumber(n * factor) + gap + to;
   });
   // The control shows both units and marks the one in use; a reader can see
   // which unit the article is in without having to work it out from the label.
