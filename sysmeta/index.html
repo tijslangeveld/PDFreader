@@ -400,22 +400,30 @@ body {
 .made-btn:hover { color: var(--accent); border-color: var(--accent); }
 /* The unit switch, hard right on the same line as the kicker. Only in a bundle
    exported with --pj-twh; without it the button is not in the page at all. */
-.unit-btn {
-  flex-shrink: 0; margin-left: auto;
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 11px; border-radius: 7px; cursor: pointer;
-  border: 1px solid var(--border); background: var(--surface, transparent);
-  color: var(--muted); font: inherit; font-size: .72rem; font-weight: 600;
+/* PJ | TWh, in the settings bar beside the theme button. A track with two
+   halves: the selected unit is the filled one, so the bar always says which
+   unit the article is in — not just which one you could switch to. */
+.tb-unit {
+  display: inline-flex; align-items: center; height: 28px; padding: 2px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--raised);
 }
-.unit-btn:hover { color: var(--accent); border-color: var(--accent); }
-/* display:inline-flex above would otherwise beat the browser's own
-   [hidden]{display:none}, and a bundle exported WITHOUT --pj-twh would show an
-   empty button that does nothing. */
-.unit-btn[hidden] { display: none; }
-/* The made-btn keeps the right edge when both are there; the unit switch then
-   sits to its left rather than both fighting for the same margin. */
-.unit-btn + .made-btn { margin-left: 8px; }
-.unit-btn .unit-btn-on { color: var(--text); }
+/* inline-flex would otherwise beat the browser's own [hidden]{display:none},
+   and a bundle exported WITHOUT --pj-twh would show an empty control. */
+.tb-unit[hidden] { display: none; }
+.tb-unit-opt {
+  min-width: 34px; height: 22px; padding: 0 8px;
+  border: none; border-radius: 6px; background: none; color: var(--muted);
+  font: inherit; font-size: .78rem; font-weight: 700; line-height: 1;
+  cursor: pointer; transition: background .12s ease, color .12s ease;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.tb-unit-opt[aria-pressed="true"] {
+  background: var(--accent); color: var(--on-accent); cursor: default;
+}
+@media (hover: hover) {
+  .tb-unit-opt[aria-pressed="false"]:hover { color: var(--accent); }
+}
+.tb-unit-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* One chart, two renderings — the viewer shows whichever unit is selected. */
 .unit-view[hidden] { display: none; }
 #made-overlay {
@@ -610,8 +618,14 @@ h3.pdf-section-plain {
    that grid cannot shrink to fit, so it scrolls sideways inside its own box
    rather than squeezing the prose around it into a column of single words. */
 .pdf-section-body .doc-table-wrap, .doc-lead .doc-table-wrap {
-  overflow-x: auto; -webkit-overflow-scrolling: touch;
   margin: 0 0 1.125rem; border: 1px solid var(--border); border-radius: 8px;
+}
+/* Only a table too wide for the column gets the scrolling frame, because the
+   frame is a scroll container and a sticky header sticks to its nearest
+   scrolling ancestor. Unframed, that ancestor is the page — which is what a long
+   table read by scrolling the article needs. See fitTables. */
+.doc-table-wrap.is-wide {
+  overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
 }
 .pdf-section-body table, .doc-lead table {
   border-collapse: collapse; width: 100%; min-width: 520px;
@@ -633,8 +647,14 @@ h3.pdf-section-plain {
    it. The pane is what makes sticky work: the wrapper already scrolls sideways,
    so it — not the page — is what a sticky cell sticks to, and a box that grows
    with its content never scrolls vertically for the header to stick against. */
-.doc-table-wrap.is-long { max-height: 70vh; overscroll-behavior: contain; }
-.doc-table-wrap.is-long thead th { position: sticky; top: 0; z-index: 2; }
+/* Fits the column: the page scrolls, so the header pins below both sticky bars
+   (--stick-top is measured in viewer.js, since both can wrap onto two rows). */
+.doc-table-wrap:not(.is-wide) thead th {
+  position: sticky; top: var(--stick-top, 46px); z-index: 2;
+}
+/* Too wide AND long: it scrolls inside its own frame, so the header pins there. */
+.doc-table-wrap.is-wide.is-long { max-height: 70vh; overscroll-behavior: contain; }
+.doc-table-wrap.is-wide.is-long thead th { position: sticky; top: 0; z-index: 2; }
 .pdf-section-body tr:last-child td, .doc-lead tr:last-child td { border-bottom: none; }
 .pdf-section-body th:last-child, .pdf-section-body td:last-child,
 .doc-lead th:last-child, .doc-lead td:last-child { border-right: none; }
@@ -677,14 +697,36 @@ h3.pdf-section-plain {
   text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
 }
 .doc-key-sub { font-size: .85rem; color: var(--muted); line-height: 1.5; margin-bottom: 10px; }
-.doc-roster { display: flex; flex-wrap: wrap; gap: 7px; }
-.doc-roster-item {
-  display: flex; align-items: center; gap: 7px; max-width: 100%;
-  padding: 5px 11px 5px 5px; border: 1px solid var(--border); border-radius: 999px;
-  background: transparent; color: var(--text); font: inherit; font-size: .86rem;
-  cursor: pointer; text-align: left;
+/* The sources as a row of cards, sharing the width equally. Flat: a hairline,
+   a flat surface, no shadow — the only weight is the letter it is cited by.
+   auto-fit rather than three fixed columns, so two sources make two halves and
+   a phone stacks them instead of squeezing three into 390px. */
+.doc-roster {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px; align-items: stretch;
 }
-.doc-roster-item.is-inert { cursor: default; opacity: .6; }
+.doc-roster-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  width: 100%; min-width: 0; padding: 11px 12px 12px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font: inherit;
+  text-align: left; cursor: pointer; transition: border-color .12s ease;
+}
+@media (hover: hover) { .doc-roster-item:not(.is-inert):hover { border-color: var(--accent); } }
+.doc-roster-item.is-inert { cursor: default; opacity: .7; }
+.doc-card-head { display: flex; align-items: center; gap: 7px; min-width: 0; width: 100%; }
+.doc-card-name {
+  font-size: .86rem; font-weight: 700; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.doc-card-title { font-size: .86rem; font-weight: 600; line-height: 1.35; color: var(--text); }
+.doc-card-sub { font-size: .8rem; line-height: 1.4; color: var(--body-text); }
+.doc-card-meta {
+  font-size: .78rem; color: var(--muted);
+  /* Bottom of the card, so a source without a subtitle keeps its date on the
+     same line as the others. */
+  margin-top: auto; padding-top: 6px;
+}
 .doc-roster-key {
   flex-shrink: 0; min-width: 20px; height: 20px; border-radius: 5px;
   /* Filled with the document's citation colour (set inline per letter); that
@@ -721,6 +763,13 @@ sup { vertical-align: super; line-height: 0; font-size: .72em; }
   .pdf-cites-live .pdf-cite:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 }
 .pdf-cites-live .pdf-cite:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* "[A p.25; C p.55]" — one superscript holding a click target per document. The
+   parts must not be raised and shrunk a second time inside it. */
+.pdf-cite-group { font-size: .72em; font-weight: 700; vertical-align: super; line-height: 0;
+  /* One citation, one line: the brackets and their parts must not be split
+     across a line break. */
+  white-space: nowrap; }
+.pdf-cite-group .pdf-cite { font-size: inherit; vertical-align: baseline; line-height: inherit; }
 
 /* ── page popup ──────────────────────────────────────────── */
 .pdfpage-overlay {
@@ -883,6 +932,13 @@ sup { vertical-align: super; line-height: 0; font-size: .72em; }
         <option value="charter">Charter</option>
       </select>
     </span>
+    <!-- Only in a bundle exported with --pj-twh. A pair, not a single button:
+         which unit you are IN and which you can switch to are both on screen,
+         the way a segmented control reads, with the document's own unit first. -->
+    <div class="tb-unit" id="unit-toggle" role="group" aria-label="Eenheid" hidden>
+      <button class="tb-unit-opt" id="unit-from" type="button" aria-pressed="true"></button>
+      <button class="tb-unit-opt" id="unit-to" type="button" aria-pressed="false"></button>
+    </div>
     <button class="tb-btn" id="theme-toggle" type="button" aria-label="Donkere modus"></button>
   </div>
 </div>
@@ -893,8 +949,6 @@ sup { vertical-align: super; line-height: 0; font-size: .72em; }
          made. Hidden unless the bundle actually carries that. -->
     <div class="doc-head-row">
       <div class="doc-kicker" id="doc-kicker">PDF summary</div>
-      <!-- Only present when the bundle was exported with --pj-twh. -->
-      <button type="button" class="unit-btn" id="unit-btn" hidden></button>
       <button type="button" class="made-btn" id="made-btn" hidden>Hoe deze analyse is gemaakt</button>
     </div>
     <h1 class="doc-title" id="doc-title"></h1>

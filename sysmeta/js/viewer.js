@@ -284,7 +284,9 @@ function wrapTables(html) {
   if (!html || html.indexOf('<table') === -1) return html;
   return String(html).replace(/<table([\s\S]*?)<\/table>/gi, (m) => {
     const rows = (m.match(/<tr[\s>]/gi) || []).length;
-    return '<div class="doc-table-wrap' + (rows > DOC_TABLE_LONG_ROWS ? ' is-long' : '') + '">' + m + '</div>';
+    // The scrolling frame is the default; fitTables takes it off a table that
+    // fits, so the safe state is the one you get if the measuring never runs.
+    return '<div class="doc-table-wrap is-wide' + (rows > DOC_TABLE_LONG_ROWS ? ' is-long' : '') + '">' + m + '</div>';
   });
 }
 
@@ -329,6 +331,29 @@ function citeToSup(html) {
     return ' class="pdf-cite" data-page="' + (uniq[0] || '') + '" data-pages="' + uniq.join(',') +
       '" role="button" tabindex="0" title="Toon pagina ' + (uniq[0] || '') + ' van het originele document"';
   }
+  // 0a) One bracket, several documents: "[A p.25; C p.55]". Written as a single
+  //     citation it matches nothing and stays plain text, so each part becomes
+  //     its own click target in its own document's colour, inside one
+  //     superscript — the text stays exactly as the analysis wrote it.
+  const CITE_PART = '([A-Z])\\s*p\\.\\s*(\\d+(?:\\s*[,\\u2013\\u2014\\-]\\s*(?:p\\.)?\\s*\\d+)*)';
+  html = html.replace(/\[([^\[\]<>]{5,200})\]/g, (m, inner) => {
+    const re = new RegExp(CITE_PART, 'g');
+    const parts = [];
+    let hit;
+    while ((hit = re.exec(inner))) parts.push({ key: hit[1], pages: hit[2], raw: hit[0], at: hit.index, end: re.lastIndex });
+    if (parts.length < 2) return m;
+    // Anything between the parts other than a separator means this is a
+    // sentence in brackets, not a citation.
+    const leftovers = inner.replace(new RegExp(CITE_PART, 'g'), '').replace(/\ben\b/g, '');
+    if (/[^\s;,.&]/.test(leftovers)) return m;
+    let out = '[';
+    parts.forEach((pt, i) => {
+      if (i) out += escHtml(inner.slice(parts[i - 1].end, pt.at));
+      out += '<span' + attrs(pt.pages) + ' data-doc="' + pt.key + '"' +
+        ' style="color:' + citeInk(pt.key) + ';font-weight:600">' + escHtml(pt.raw) + '</span>';
+    });
+    return '<sup class="pdf-cite-group">' + out + ']</sup>';
+  });
   // 0) A comparison cites as [A p.30]: the letter says which document, and the
   //    popup opens THAT bundle entry. Without it the page number means nothing.
   const MULTI = '\\[([A-Z])\\s*p\\.\\s*(\\d+(?:\\s*[,\\u2013\\u2014\\-]\\s*(?:p\\.)?\\s*\\d+)*)\\]';
@@ -737,16 +762,22 @@ function render(data) {
     '<div class="doc-key-sub">Elke verwijzing in de tekst — en elke reeks in een grafiek — draagt de kleur van het document waar hij vandaan komt.</div>' +
     '<div class="doc-roster">' + SOURCES.map((sv) => {
     const live = hasEntry(entryFor(sv.key));
-    // The chip shows what the document is called in the analysis; which file that
-    // is stays findable in the tooltip.
+    // The card shows what the document is called here, and — when the record
+    // carries them — what it actually is and when it came out. Which file it is
+    // stays findable in the tooltip. Everything past the letter is optional.
     const hint = (sv.fileTitle && sv.fileTitle !== sv.title ? 'Bestand: ' + sv.fileTitle + ' — ' : '') +
       (live ? 'Open dit document' : 'Dit document is niet meegeleverd');
+    const meta = [sv.published, sv.pageCount ? sv.pageCount + ' pag.' : ''].filter(Boolean).join(' · ');
     return '<button type="button" class="doc-roster-item' + (live ? '' : ' is-inert') + '"' +
       ' data-key="' + escHtml(sv.key) + '" title="' + escHtml(hint) + '">' +
-      '<span class="doc-roster-key" style="background:' + citeInk(sv.key) + '">' + escHtml(sv.key) + '</span>' +
-      '<span>' + escHtml(sv.title || '') +
-        (sv.pageCount ? ' <span class="doc-roster-pages">· ' + sv.pageCount + ' pag.</span>' : '') +
-      '</span></button>';
+      '<span class="doc-card-head">' +
+        '<span class="doc-roster-key" style="background:' + citeInk(sv.key) + '">' + escHtml(sv.key) + '</span>' +
+        '<span class="doc-card-name">' + escHtml(sv.title || '') + '</span>' +
+      '</span>' +
+      (sv.docTitle ? '<span class="doc-card-title">' + escHtml(sv.docTitle) + '</span>' : '') +
+      (sv.docSub ? '<span class="doc-card-sub">' + escHtml(sv.docSub) + '</span>' : '') +
+      (meta ? '<span class="doc-card-meta">' + escHtml(meta) + '</span>' : '') +
+    '</button>';
   }).join('') + '</div></div>' : '';
   bodyEl.innerHTML =
     roster +
@@ -764,6 +795,12 @@ function render(data) {
     // Ceil, never round: half a pixel short is a hairline of article showing
     // between the two bars.
     document.documentElement.style.setProperty('--topbar-h', Math.ceil(h) + 'px');
+    // Where a sticky table header has to stop: below BOTH bars, not just the
+    // settings bar — the sections bar (with the search box) is sticky too, and a
+    // header that only clears the first one slides underneath the second.
+    const bar = document.querySelector('.pdf-sections-bar');
+    const barH = bar ? bar.getBoundingClientRect().height : 0;
+    document.documentElement.style.setProperty('--stick-top', Math.ceil(h + barH) + 'px');
   };
   syncTopbarHeight();
   window.addEventListener('resize', syncTopbarHeight);
@@ -782,6 +819,7 @@ function render(data) {
   if (tools && bar) bar.insertBefore(tools, bar.firstChild);
 
   const sectionsEl = $('pdf-sections');
+  fitTables(bodyEl);
   wireCollapseAll(bodyEl);
   if (!isTk && !isMulti) wireDownloadSource(bodyEl);
   if (isMulti) bodyEl.addEventListener('click', (e) => {
@@ -1003,6 +1041,23 @@ function wireSearch(bodyEl) {
   });
 }
 
+// A table that fits its column loses the scrolling frame — and with it the
+// scroll container that a sticky header would otherwise stick to. Without the
+// frame the page is that container, so the header pins under the bars at the top
+// of the window while you read down the table.
+function fitTables(root) {
+  const wraps = root ? root.querySelectorAll('.doc-table-wrap') : [];
+  if (!wraps.length) return;
+  const fit = () => wraps.forEach((w) => {
+    const t = w.querySelector('table');
+    if (!t) return;
+    w.classList.add('is-wide');            // measure with the frame on
+    w.classList.toggle('is-wide', t.scrollWidth > w.clientWidth + 1);
+  });
+  fit();
+  if (window.ResizeObserver) new window.ResizeObserver(fit).observe(root);
+}
+
 // ── PJ ⇄ TWh ────────────────────────────────────────────────
 // A bundle exported with --pj-twh carries every chart twice, once per unit, and
 // this converts everything else: the running text, the tables, the chart
@@ -1074,31 +1129,41 @@ function applyUnit(unit, toggle) {
     // rather than being replaced by something wrong.
     span.textContent = n === null ? raw + gap + from : fmtNlNumber(n * factor) + gap + to;
   });
-  const btn = $('unit-btn');
-  if (btn) {
-    const other = unit === from ? to : from;
-    btn.innerHTML = 'Toon in <span class="unit-btn-on">' + escHtml(other) + '</span>';
-    btn.setAttribute('aria-label', 'Schakel de eenheden om naar ' + other);
-    btn.title = '1 ' + escHtml(to) + ' = ' + (1 / (toggle.factor || 1)).toLocaleString('nl-NL',
-      { maximumFractionDigits: 2 }) + ' ' + escHtml(from);
+  // The control shows both units and marks the one in use; a reader can see
+  // which unit the article is in without having to work it out from the label.
+  const fromBtn = $('unit-from'), toBtn = $('unit-to');
+  if (fromBtn && toBtn) {
+    fromBtn.textContent = from;
+    toBtn.textContent = to;
+    fromBtn.setAttribute('aria-pressed', String(unit === from));
+    toBtn.setAttribute('aria-pressed', String(unit === to));
+    const rate = '1 ' + to + ' = ' + (1 / (toggle.factor || 1)).toLocaleString('nl-NL',
+      { maximumFractionDigits: 2 }) + ' ' + from;
+    fromBtn.title = 'Toon alles in ' + from + ' — ' + rate;
+    toBtn.title = 'Toon alles in ' + to + ' — ' + rate;
+    fromBtn.setAttribute('aria-label', 'Toon alles in ' + from);
+    toBtn.setAttribute('aria-label', 'Toon alles in ' + to);
   }
   try { localStorage.setItem('viewerUnit:' + bundleName(), unit); } catch (_) {}
 }
 
 function wireUnitToggle(data) {
   const toggle = data && data.unitToggle;
-  const btn = $('unit-btn');
-  if (!toggle || !btn) return;
+  const group = $('unit-toggle'), fromBtn = $('unit-from'), toBtn = $('unit-to');
+  if (!toggle || !group || !fromBtn || !toBtn) return;
   markUnitValues($('doc-body'));
-  btn.hidden = false;
+  group.hidden = false;
+  // The document's own unit is where it starts; a reader who chose otherwise
+  // gets their choice back, per bundle.
   let unit = toggle.from;
   try {
     const saved = localStorage.getItem('viewerUnit:' + bundleName());
     if (saved === toggle.to || saved === toggle.from) unit = saved;
   } catch (_) {}
-  btn.addEventListener('click', () => {
-    applyUnit(document.documentElement.dataset.unit === toggle.to ? toggle.from : toggle.to, toggle);
-  });
+  // Each half selects its own unit rather than flipping whatever is current:
+  // pressing "PJ" means PJ, however many times you press it.
+  fromBtn.addEventListener('click', () => applyUnit(toggle.from, toggle));
+  toBtn.addEventListener('click', () => applyUnit(toggle.to, toggle));
   applyUnit(unit, toggle);
 }
 
