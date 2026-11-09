@@ -1,0 +1,177 @@
+{
+  "v": 1,
+  "cipher": "AES-GCM",
+  "bundleId": "fa9c20d1b500",
+  "kdf": {
+    "name": "PBKDF2",
+    "hash": "SHA-256",
+    "iterations": 310000,
+    "salt": "EIilLD6Oo0VZs8b5SQGQkg=="
+  },
+  "entries": {
+    "analysis": {
+      "iv": "4mzu6E2M24hegL4j",
+      "bytes": 348536
+    },
+    "source_D1": {
+      "iv": "acNMBSb34HLQt6pR",
+      "bytes": 1720729
+    },
+    "source_D5": {
+      "iv": "fvWFWpvLQs9bmblx",
+      "bytes": 2253723
+    },
+    "source_D6": {
+      "iv": "5UhToedxDwcuWJSx",
+      "bytes": 1638607
+    },
+    "source_D11": {
+      "iv": "JCp9IWQGbFBjNLFY",
+      "bytes": 3539105
+    },
+    "source_D12": {
+      "iv": "xPiWlJCqioDry3vl",
+      "bytes": 1685538
+    },
+    "source_D15": {
+      "iv": "yxy4hLYvCsD/1kQ8",
+      "bytes": 5516175
+    },
+    "source_D16": {
+      "iv": "+SoQ7P9MbArBh4Lp",
+      "bytes": 2364892
+    },
+    "source_D17": {
+      "iv": "3sXh5jUyJYf0javr",
+      "bytes": 1057674
+    },
+    "source_D18": {
+      "iv": "2C/v/FwRLyfvKhJd",
+      "bytes": 1317304
+    },
+    "source_D19": {
+      "iv": "nCe/kaUDin/0dUAx",
+      "bytes": 368458
+    },
+    "source_D26": {
+      "iv": "+VSLfo5p4xdaqYaZ",
+      "bytes": 6049092
+    },
+    "source_D28": {
+      "iv": "TjynrVaUjAh+Giom",
+      "bytes": 5416654
+    },
+    "source_D29": {
+      "iv": "hHXvhB9fHT7Cw7U/",
+      "bytes": 5591837
+    },
+    "source_D32": {
+      "iv": "SwpG2R0+njPwNbyV",
+      "bytes": 5869404
+    },
+    "source_D33": {
+      "iv": "EfODqhpEoaCjsum7",
+      "bytes": 2448337
+    },
+    "source_D37": {
+      "iv": "n11Wy0CR2iS1s1HJ",
+      "bytes": 1883523
+    },
+    "source_D38": {
+      "iv": "Npont4BeERdNbQVh",
+      "bytes": 2993124
+    },
+    "source_D150": {
+      "iv": "0lmiQWgi1j4bfVzq",
+      "bytes": 795856
+    },
+    "source_D151": {
+      "iv": "410KPaS9Up496UsG",
+      "bytes": 5127019
+    },
+    "source_D152": {
+      "iv": "pEaSDOgSvf+qVZN+",
+      "bytes": 2875663
+    },
+    "source_D153": {
+      "iv": "3f8P+LWnEeI+sf3q",
+      "bytes": 3463498
+    },
+    "source_D154": {
+      "iv": "atE+CJh6TwyfJMGE",
+      "bytes": 2562267
+    },
+    "source_D155": {
+      "iv": "FnqD1yjThuouWp4L",
+      "bytes": 6332881
+    },
+    "source_D156": {
+      "iv": "j+NHJyL8Ujbbzo42",
+      "bytes": 19317711
+    },
+    "source_D157": {
+      "iv": "PYgLKTueWMac3DLx",
+      "bytes": 69111249
+    },
+    "source_D158": {
+      "iv": "JxW+Ksl5zSHmE6Xq",
+      "bytes": 160439
+    },
+    "source_D159": {
+      "iv": "HBcEqsqGXTCy3LoD",
+      "bytes": 3019773
+    },
+    "source_D160": {
+      "iv": "HnHtZon7al/YTc91",
+      "bytes": 24959
+    },
+    "source_D161": {
+      "iv": "yx8+AT+fUepu80t7",
+      "bytes": 143821
+    },
+    "source_D162": {
+      "iv": "NtZbrPL/ec3U4/PW",
+      "bytes": 67006
+    },
+    "source_D163": {
+      "iv": "Gs//snBtZQzloFrB",
+      "bytes": 79336
+    },
+    "source_D164": {
+      "iv": "cA4FBi5qTtXp65HD",
+      "bytes": 293575
+    },
+    "source_D165": {
+      "iv": "FHszdH3PM5vmSSaS",
+      "bytes": 51326
+    },
+    "source_D167": {
+      "iv": "fl4shW2rrcRuhpBs",
+      "bytes": 189448
+    },
+    "source_D168": {
+      "iv": "II0FR6zTqD5Q1qf7",
+      "bytes": 229290
+    },
+    "source_D169": {
+      "iv": "PslCGrmFnTA1umXJ",
+      "bytes": 2190688
+    },
+    "source_D170": {
+      "iv": "83s/mpIKXmG9PkZY",
+      "bytes": 735751
+    },
+    "source_D171": {
+      "iv": "iRQxq04ZtdYQxRrv",
+      "bytes": 8381583
+    },
+    "source_D172": {
+      "iv": "XZXIaUu7gTYpIRtJ",
+      "bytes": 30686351
+    },
+    "source_D173": {
+      "iv": "2mVRg7hNhmwn/2qi",
+      "bytes": 28509549
+    }
+  }
+}
